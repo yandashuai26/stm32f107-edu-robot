@@ -3,6 +3,12 @@
 
 #include "stm32f10x.h"
 
+#include "FreeRTOS.h"
+#include "semphr.h"
+
+// 电机目标到达信号量（ISR中give，vTaskMotorReached中take）
+extern SemaphoreHandle_t MotorTargetReachedSemaphore;
+
 // 电机状态结构体
 typedef struct {
     uint32_t target_pulses;    // 目标脉冲数
@@ -16,6 +22,7 @@ typedef struct {
     uint8_t  stop_pending;     // 停机请求标志: motor_stop()置1, ISR减速到最低速后清零并停机
 } motor_t;
 
+void motor_target_semaphore_create(void);
 void motor_init(void);
 void motor_set_dir(uint8_t dir);
 void motor_change_dir(void);

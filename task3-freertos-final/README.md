@@ -1,12 +1,12 @@
 # 任务3 — FreeRTOS 最终版
 
-基于 STM32F107VCT6 的教育机器人控制系统最终版本，在任务2 FreeRTOS 架构基础上新增障碍物检测恢复、LED 模式控制和结构体状态管理。
+基于 STM32F107VCT6 的教育机器人控制系统最终版本，在任务2 FreeRTOS 架构基础上新增障碍物检测恢复、LED 模式控制、中点定位和结构体状态管理。所有串口/传感器事件均采用信号量驱动，彻底消除轮询。
 
 ## 版本概述
 
 | 项目 | 说明 |
 |------|------|
-| **架构** | FreeRTOS 实时多任务 (6 任务) |
+| **架构** | FreeRTOS 实时多任务 (7 任务) |
 | **电机速度** | 1000 pps |
 | **状态管理** | 结构体 (`motor_t`) |
 | **IPC 机制** | 二进制信号量 + 消息队列 |
@@ -19,8 +19,9 @@
 ```
 优先级 4:  vTaskLimitSwitch       限位开关处理 (信号量触发)
 优先级 4:  vTaskAbnormalSituation  异常情况处理 (障碍物检测与恢复)
-优先级 3:  vTaskControl            串口指令解析 (STOP/START)
+优先级 3:  vTaskControl            串口指令解析 (信号量阻塞)
 优先级 2:  vTaskCollect            传感器数据采集 (温度 + 距离)
+优先级 2:  vTaskMotorReached       中点到达检测 (信号量触发)
 优先级 1:  vTaskCommunication      数据显示 (OLED + 串口)
 优先级 1:  vTaskLedMode            LED 模式控制
 ```
@@ -30,6 +31,11 @@
 ```
 EXTI 中断 ──(信号量)──> vTaskLimitSwitch ──> motor_change_dir()
                                           ──> motor_reset_pulse_count()
+                                          ──> motor_set_pulse_count(3050)
+
+USART3 IDLE中断 ──(信号量)──> vTaskControl ──> STOP/START 指令处理
+
+TIM5 脉冲到达 ──(信号量)──> vTaskMotorReached ──> motor_set_pulse_count(10000000)
 
 vTaskCollect ──(信号量)──> vTaskAbnormalSituation
               ──(队列)──> AbnormalSituationDisQueue  ──> 距离数据
@@ -39,8 +45,6 @@ vTaskCollect ──(信号量)──> vTaskAbnormalSituation
 vTaskCollect ──(队列)──> vTaskCommunication ──> OLED + printf
 
 vTaskAbnormalSituation ──(队列)──> LedModeQueue    ──> vTaskLedMode
-vTaskControl (START)    ──(队列)──> LedModeQueue    ──> vTaskLedMode
-FreeRTOS_Start (初始化) ──(队列)──> LedModeQueue    ──> vTaskLedMode
 ```
 
 ## 硬件平台
@@ -121,6 +125,15 @@ FreeRTOS_Start (初始化) ──(队列)──> LedModeQueue    ──> vTaskLe
   - 距离 → AbnormalSituationDisQueue → vTaskAbnormalSituation
   - 信号量 → AbnormalSituationSemaphore → vTaskAbnormalSituation
 
+### vTaskMotorReached (优先级 2)
+
+- **功能**: 中点到达检测，限位触发后自动定位中点
+- **触发**: `MotorTargetReachedSemaphore` 二进制信号量 (TIM5 ISR 中释放)
+- **流程**:
+  1. vTaskLimitSwitch 触发 → 改变方向 + 设目标脉冲 3050
+  2. 电机运行 3050 脉冲 → TIM5 ISR 检测到达 → 释放信号量
+  3. vTaskMotorReached 唤醒 → 显示 "Reached" → 清零脉冲 → 重设目标 10000000（继续运行至下一限位）
+
 ### vTaskCommunication (优先级 1)
 
 - **功能**: 数据展示
@@ -128,8 +141,10 @@ FreeRTOS_Start (初始化) ──(队列)──> LedModeQueue    ──> vTaskLe
 - **输出**:
   - OLED 第 2 行: 温度值
   - OLED 第 4 行: 距离值
-  - 串口: `temp:XXX
-` / `dis:XXX
+  - 串口: `temp:XXX
+
+` / `dis:XXX
+
 `
 
 ### vTaskLedMode (优先级 1)
@@ -163,6 +178,8 @@ FreeRTOS_Start (初始化) ──(队列)──> LedModeQueue    ──> vTaskLe
 |--------|------|----------|--------|--------|
 | `LimitSemaphore` | 二进制 | `gpio.c:limit_semaphore_create()` | EXTI ISR | vTaskLimitSwitch |
 | `AbnormalSituationSemaphore` | 二进制 | `FreeRTOS_Start()` | vTaskCollect | vTaskAbnormalSituation |
+| `USART3_RxSemaphore` | 二进制 | `usart.c:usart3_semaphore_create()` | USART3 ISR | vTaskControl |
+| `MotorTargetReachedSemaphore` | 二进制 | `motor.c:motor_target_semaphore_create()` | TIM5 ISR | vTaskMotorReached |
 
 ## 中断向量分配
 
@@ -220,8 +237,10 @@ typedef struct {
 - 端口: USART3 (PC10 TX, PC11 RX)
 - 波特率: 9600 bps
 - 数据位: 8, 停止位: 1, 校验: 无
-- 发送 `STOP
-` 停止电机，`START
+- 发送 `STOP
+
+` 停止电机，`START
+
 ` 启动电机
 
 ## 模块依赖
@@ -249,12 +268,17 @@ main.c
 
 | 新增 | 说明 |
 |------|------|
-| vTaskAbnormalSituation | 障碍物检测与自动恢复任务 |
+| vTaskAbnormalSituation | 障碍物检测与自动恢复任务 (信号量驱动) |
+| vTaskMotorReached | 中点定位任务 (信号量驱动，3050脉冲回退) |
 | vTaskLedMode | LED 4 模式独立控制任务 |
+| vTaskControl 优化 | 从轮询改为 USART3_RxSemaphore 信号量阻塞 |
 | AbnormalSituationSemaphore | 异常情况信号量 |
+| USART3_RxSemaphore | 串口接收完成信号量 |
+| MotorTargetReachedSemaphore | 电机目标到达信号量 |
 | AbnormalSituationDisQueue | 异常情况距离队列 |
 | LedModeQueue | LED 模式指令队列 |
-| motor_t 结构体 | 电机状态统一管理 |
+| motor_t 结构体 | 电机状态统一管理 (1Hz斜坡加减速) |
+| 中点定位逻辑 | 限位触发 → 回退3050脉冲到中点 → 继续运行 |
 
 ---
 

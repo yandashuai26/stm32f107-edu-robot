@@ -26,12 +26,14 @@ void vTaskCollect(void *pvParameters);
 void vTaskCommunication(void *pvParameters);
 void vTaskAbnormalSituation(void *pvParameters);
 void vTaskLedMode(void *pvParameters);
+void vTaskMotorReached(void *pvParameters);
 
 void FreeRTOS_Start(void)
 {
     // 创建限位开关信号量（必须在任务创建前创建）
     limit_semaphore_create();
     usart3_semaphore_create();
+    motor_target_semaphore_create();
 
     // 创建异常情况信号量
     AbnormalSituationSemaphore = xSemaphoreCreateBinary();
@@ -58,6 +60,7 @@ void FreeRTOS_Start(void)
     xTaskCreate(vTaskAbnormalSituation,  "vTaskAbnormalSituation",  256, NULL, 4, NULL);
     xTaskCreate(vTaskControl,      "vTaskControl",      256, NULL, 3, NULL);
     xTaskCreate(vTaskCollect,      "vTaskCollect",      256, NULL, 2, NULL);
+    xTaskCreate(vTaskMotorReached,  "vTaskMotorReached",    256, NULL, 2, NULL);
     xTaskCreate(vTaskCommunication,"vTaskCommunication", 256, NULL, 1, NULL);
 	xTaskCreate(vTaskLedMode,            "vTaskLedMode",            256, NULL, 1, NULL);
 
@@ -73,6 +76,7 @@ void vTaskLimitSwitch(void *pvParameters)
         // 阻塞等待限位开关信号量（由EXTI中断释放）
         if(xSemaphoreTake(LimitSemaphore, portMAX_DELAY) == pdTRUE)
         {
+			OLED_ShowString(2, 6, (uint8_t*)"Limit", 16);
             // 50ms消抖延时（防止一次碰触触发多次EXTI）
             vTaskDelay(pdMS_TO_TICKS(50));
 
@@ -84,6 +88,7 @@ void vTaskLimitSwitch(void *pvParameters)
                 // PC13限位开关触发，反转电机方向并清零脉冲
                 motor_reset_pulse_count();
                 motor_change_dir();
+                motor_set_pulse_count(3050);
                 set_limit_reached_flag();
 
                 // 进入冷却期300ms，屏蔽开关释放抖动（ISR中不给信号量）
@@ -96,6 +101,7 @@ void vTaskLimitSwitch(void *pvParameters)
                 // PC14限位开关触发，反转电机方向并清零脉冲
                 motor_reset_pulse_count();
                 motor_change_dir();
+				motor_set_pulse_count(3050);
                 set_limit_reached_flag();
 
                 // 进入冷却期300ms，屏蔽开关释放抖动（ISR中不给信号量）
@@ -103,6 +109,9 @@ void vTaskLimitSwitch(void *pvParameters)
                 vTaskDelay(pdMS_TO_TICKS(300));
                 limit_exit_cooldown();
             }
+			vTaskDelay(pdMS_TO_TICKS(1000));
+			// 清除显示
+			OLED_ShowString(2, 6, (uint8_t*)"          ", 16);
         }
     }
 }
@@ -125,10 +134,11 @@ void vTaskAbnormalSituation(void *pvParameters)
             {
                 sprintf(display_buffer, "dis:%04d", dis);
                 OLED_ShowString(2, 4, (uint8_t*)display_buffer, 16);
-
                 if(dis < 50)  // 检测到障碍物
                 {
                     obstacle_clear_count = 0;
+				LedMode = 3;
+                ret = xQueueSend(LedModeQueue, &LedMode, 0);
                     if(!motor_stopped_by_obstacle)
                     {
                         motor_stop();
@@ -239,6 +249,28 @@ void vTaskCollect(void *pvParameters)
 
         // 每隔100ms采集一次
         vTaskDelay(100);
+    }
+}
+
+
+// 电机到达检测任务实现（优先级2）
+void vTaskMotorReached(void *pvParameters)
+{
+    while(1)
+    {
+        // 阻塞等待电机目标到达信号量（由TIM5 ISR释放）
+        if(xSemaphoreTake(MotorTargetReachedSemaphore, portMAX_DELAY) == pdTRUE)
+        {
+			OLED_ShowString(2, 0, (uint8_t*)"Reached", 16);
+            // 已到达中点(3050脉冲)，清除脉冲计数，重设目标为极大值继续运行
+            motor_reset_pulse_count();
+            motor_set_pulse_count(10000000);
+			
+			vTaskDelay(1000);
+			// 清除显示
+			OLED_ShowString(2, 0, (uint8_t*)"        ", 16);
+        }
+		vTaskDelay(100);
     }
 }
 

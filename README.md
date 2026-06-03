@@ -42,14 +42,14 @@
 | **任务1 — 稳定版** | [`task1-bare-metal-stable/`](task1-bare-metal-stable/) | 裸机轮询 | 60min+ 稳定运行验证，限位回退 3050，速度 1000 |
 | **任务2 — 稳定版** | [`task2-freertos-stable/`](task2-freertos-stable/) | FreeRTOS (4 任务) | 信号量 + 队列 IPC，STOP/START 指令，速度 1000 |
 | **任务2 — 结构体版** | [`task2-freertos-struct-state/`](task2-freertos-struct-state/) | FreeRTOS (4 任务) | 结构体状态管理，速度 1500 |
-| **任务3 — 最终版** | [`task3-freertos-final/`](task3-freertos-final/) | FreeRTOS (6 任务) | 障碍物检测恢复 + LED 模式控制 + 结构体状态管理，速度 1000 |
+| **任务3 — 最终版** | [`task3-freertos-final/`](task3-freertos-final/) | FreeRTOS (7 任务) | 障碍物恢复 + LED 模式 + 中点定位 + 信号量驱动，速度 1000 |
 
 ### 详细版本对比
 
 | 功能 | 任务1比较 | 任务1稳定 | 任务2稳定 | 任务2结构体 | 任务3 |
 |------|:---:|:---:|:---:|:---:|:---:|
 | RTOS | ✗ | ✗ | ✓ FreeRTOS | ✓ FreeRTOS | ✓ FreeRTOS |
-| 任务数 | 1 (主循环) | 1 (主循环) | 4 | 4 | 6 |
+| 任务数 | 1 (主循环) | 1 (主循环) | 4 | 4 | 7 |
 | 电机速度 (pps) | 默认 | 1000 | 1000 | 1500 | 1000 |
 | 限位回退 (脉冲) | 5900 | 3050 | — | — | — |
 | 串口指令 | ✗ | ✗ | STOP/START | STOP/START | STOP/START |
@@ -58,6 +58,8 @@
 | 消息队列 | ✗ | ✗ | ✓ | ✓ | ✓ |
 | 障碍物检测恢复 | ✗ | ✗ | ✗ | ✗ | ✓ (3次确认) |
 | LED 模式控制 | ✗ | ✗ | ✗ | ✗ | ✓ (4模式) |
+| 中点定位 | ✗ | ✗ | ✗ | ✗ | ✓ (3050脉冲) |
+| 信号量驱动串口 | ✗ | ✗ | ✗ | ✗ | ✓ |
 | 稳定性验证 | ✗ | ✓ (60min+) | ✓ | ✓ | ✓ |
 
 ## 仓库结构
@@ -199,14 +201,14 @@ This repository contains five progressive versions of an educational robot contr
 | **Task 1 — Stable** | [`task1-bare-metal-stable/`](task1-bare-metal-stable/) | Bare metal (polling) | Verified 60min+ stable run, limit retract=3050, speed=1000 |
 | **Task 2 — Stable** | [`task2-freertos-stable/`](task2-freertos-stable/) | FreeRTOS (4 tasks) | Semaphore + Queue IPC, STOP/START commands, speed=1000 |
 | **Task 2 — Struct** | [`task2-freertos-struct-state/`](task2-freertos-struct-state/) | FreeRTOS (4 tasks) | Struct-based state management, speed=1500 |
-| **Task 3 — Final** | [`task3-freertos-final/`](task3-freertos-final/) | FreeRTOS (6 tasks) | Obstacle recovery + LED modes + struct state mgmt, speed=1000 |
+| **Task 3 — Final** | [`task3-freertos-final/`](task3-freertos-final/) | FreeRTOS (7 tasks) | Obstacle recovery + LED modes + midpoint positioning + semaphore-driven, speed=1000 |
 
 ### Detailed Feature Comparison
 
 | Feature | Task1 Compare | Task1 Stable | Task2 Stable | Task2 Struct | Task3 |
 |---------|:---:|:---:|:---:|:---:|:---:|
 | RTOS | ✗ | ✗ | ✓ FreeRTOS | ✓ FreeRTOS | ✓ FreeRTOS |
-| Task Count | 1 (main loop) | 1 (main loop) | 4 | 4 | 6 |
+| Task Count | 1 (main loop) | 1 (main loop) | 4 | 4 | 7 |
 | Motor Speed (pps) | Default | 1000 | 1000 | 1500 | 1000 |
 | Limit Retract (pulses) | 5900 | 3050 | — | — | — |
 | Serial Commands | ✗ | ✗ | STOP/START | STOP/START | STOP/START |
@@ -215,6 +217,8 @@ This repository contains five progressive versions of an educational robot contr
 | Message Queues | ✗ | ✗ | ✓ | ✓ | ✓ |
 | Obstacle Recovery | ✗ | ✗ | ✗ | ✗ | ✓ (3-count) |
 | LED Modes | ✗ | ✗ | ✗ | ✗ | ✓ (4 modes) |
+| Midpoint Positioning | ✗ | ✗ | ✗ | ✗ | ✓ (3050 pulses) |
+| Semaphore-driven UART | ✗ | ✗ | ✗ | ✗ | ✓ |
 | Stable Run Verified | ✗ | ✓ (60min+) | ✓ | ✓ | ✓ |
 
 ## Repository Structure
