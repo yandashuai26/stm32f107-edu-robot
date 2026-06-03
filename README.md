@@ -42,21 +42,22 @@
 | **任务1 — 稳定版** | [`task1-bare-metal-stable/`](task1-bare-metal-stable/) | 裸机轮询 | 60min+ 稳定运行验证，限位回退 3050，速度 1000 |
 | **任务2 — 稳定版** | [`task2-freertos-stable/`](task2-freertos-stable/) | FreeRTOS (4 任务) | 信号量 + 队列 IPC，STOP/START 指令，速度 1000 |
 | **任务2 — 结构体版** | [`task2-freertos-struct-state/`](task2-freertos-struct-state/) | FreeRTOS (4 任务) | 结构体状态管理，速度 1500 |
-| **任务3 — 最终版** | [`task3-freertos/`](task3-freertos/) | FreeRTOS (4 任务) | 最终整合版本，速度 1000 |
+| **任务3 — 最终版** | [`task3-freertos-final/`](task3-freertos-final/) | FreeRTOS (6 任务) | 障碍物检测恢复 + LED 模式控制 + 结构体状态管理，速度 1000 |
 
 ### 详细版本对比
 
 | 功能 | 任务1比较 | 任务1稳定 | 任务2稳定 | 任务2结构体 | 任务3 |
 |------|:---:|:---:|:---:|:---:|:---:|
 | RTOS | ✗ | ✗ | ✓ FreeRTOS | ✓ FreeRTOS | ✓ FreeRTOS |
-| 任务数 | 1 (主循环) | 1 (主循环) | 4 | 4 | 4 |
+| 任务数 | 1 (主循环) | 1 (主循环) | 4 | 4 | 6 |
 | 电机速度 (pps) | 默认 | 1000 | 1000 | 1500 | 1000 |
 | 限位回退 (脉冲) | 5900 | 3050 | — | — | — |
 | 串口指令 | ✗ | ✗ | STOP/START | STOP/START | STOP/START |
-| 结构体状态管理 | ✗ | ✗ | ✗ | ✓ | ✗ |
+| 结构体状态管理 | ✗ | ✗ | ✗ | ✓ | ✓ |
 | 信号量 IPC | ✗ | ✗ | ✓ | ✓ | ✓ |
 | 消息队列 | ✗ | ✗ | ✓ | ✓ | ✓ |
-| 障碍物恢复滤波 | 3 次确认 | 3 次确认 | — | — | — |
+| 障碍物检测恢复 | ✗ | ✗ | ✗ | ✗ | ✓ (3次确认) |
+| LED 模式控制 | ✗ | ✗ | ✗ | ✗ | ✓ (4模式) |
 | 稳定性验证 | ✗ | ✓ (60min+) | ✓ | ✓ | ✓ |
 
 ## 仓库结构
@@ -72,7 +73,7 @@ stm32f107-edu-robot/
 ├── task1-bare-metal-stable/         ← 任务1：裸机稳定版 (60min 验证)
 ├── task2-freertos-stable/           ← 任务2：FreeRTOS 稳定版
 ├── task2-freertos-struct-state/     ← 任务2：FreeRTOS 结构体状态管理版
-└── task3-freertos/                  ← 任务3：FreeRTOS 最终整合版
+└── task3-freertos-final/            ← 任务3：FreeRTOS 最终整合版
 ```
 
 每个子项目包含：
@@ -198,21 +199,22 @@ This repository contains five progressive versions of an educational robot contr
 | **Task 1 — Stable** | [`task1-bare-metal-stable/`](task1-bare-metal-stable/) | Bare metal (polling) | Verified 60min+ stable run, limit retract=3050, speed=1000 |
 | **Task 2 — Stable** | [`task2-freertos-stable/`](task2-freertos-stable/) | FreeRTOS (4 tasks) | Semaphore + Queue IPC, STOP/START commands, speed=1000 |
 | **Task 2 — Struct** | [`task2-freertos-struct-state/`](task2-freertos-struct-state/) | FreeRTOS (4 tasks) | Struct-based state management, speed=1500 |
-| **Task 3 — Final** | [`task3-freertos/`](task3-freertos/) | FreeRTOS (4 tasks) | Consolidated final version, speed=1000 |
+| **Task 3 — Final** | [`task3-freertos-final/`](task3-freertos-final/) | FreeRTOS (6 tasks) | Obstacle recovery + LED modes + struct state mgmt, speed=1000 |
 
 ### Detailed Feature Comparison
 
 | Feature | Task1 Compare | Task1 Stable | Task2 Stable | Task2 Struct | Task3 |
 |---------|:---:|:---:|:---:|:---:|:---:|
 | RTOS | ✗ | ✗ | ✓ FreeRTOS | ✓ FreeRTOS | ✓ FreeRTOS |
-| Task Count | 1 (main loop) | 1 (main loop) | 4 | 4 | 4 |
+| Task Count | 1 (main loop) | 1 (main loop) | 4 | 4 | 6 |
 | Motor Speed (pps) | Default | 1000 | 1000 | 1500 | 1000 |
 | Limit Retract (pulses) | 5900 | 3050 | — | — | — |
 | Serial Commands | ✗ | ✗ | STOP/START | STOP/START | STOP/START |
-| Struct State Mgmt | ✗ | ✗ | ✗ | ✓ | ✗ |
+| Struct State Mgmt | ✗ | ✗ | ✗ | ✓ | ✓ |
 | Semaphore IPC | ✗ | ✗ | ✓ | ✓ | ✓ |
 | Message Queues | ✗ | ✗ | ✓ | ✓ | ✓ |
-| Obstacle Recovery Filter | 3-count | 3-count | — | — | — |
+| Obstacle Recovery | ✗ | ✗ | ✗ | ✗ | ✓ (3-count) |
+| LED Modes | ✗ | ✗ | ✗ | ✗ | ✓ (4 modes) |
 | Stable Run Verified | ✗ | ✓ (60min+) | ✓ | ✓ | ✓ |
 
 ## Repository Structure
@@ -228,7 +230,7 @@ stm32f107-edu-robot/
 ├── task1-bare-metal-stable/         ← Task 1: Bare metal stable (60min verified)
 ├── task2-freertos-stable/           ← Task 2: FreeRTOS stable version
 ├── task2-freertos-struct-state/     ← Task 2: FreeRTOS with struct state management
-└── task3-freertos/                  ← Task 3: Final consolidated FreeRTOS version
+└── task3-freertos-final/            ← Task 3: Final consolidated FreeRTOS version
 ```
 
 Each sub-project contains:

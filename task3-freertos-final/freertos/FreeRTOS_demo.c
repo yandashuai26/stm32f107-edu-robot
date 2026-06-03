@@ -5,9 +5,14 @@
 
 extern volatile uint8_t limit_pending = 0;  // 限位开关中断挂起标志
 
+// 限位开关专用信号量（vTaskCollect中give，vTaskAbnormalSituation中take）
+SemaphoreHandle_t AbnormalSituationSemaphore;
+
 // 消息队列
 QueueHandle_t TempQueue;
 QueueHandle_t DisQueue;
+QueueHandle_t AbnormalSituationDisQueue;
+QueueHandle_t LedModeQueue; // 0-->关闭 1-->亮 2-->慢闪 3-->快闪
 
 // 串口接收缓冲区
 extern volatile uint8_t  USART3_RxBuffer[];
@@ -19,23 +24,42 @@ void vTaskLimitSwitch(void *pvParameters);
 void vTaskControl(void *pvParameters);
 void vTaskCollect(void *pvParameters);
 void vTaskCommunication(void *pvParameters);
+void vTaskAbnormalSituation(void *pvParameters);
+void vTaskLedMode(void *pvParameters);
 
 void FreeRTOS_Start(void)
 {
     // 创建限位开关信号量（必须在任务创建前创建）
     limit_semaphore_create();
+    usart3_semaphore_create();
+
+    // 创建异常情况信号量
+    AbnormalSituationSemaphore = xSemaphoreCreateBinary();
+    configASSERT(AbnormalSituationSemaphore != NULL);
 
     // 创建消息队列，长度 20个单元，每个 uint32_t
     TempQueue = xQueueCreate(20, sizeof(uint32_t));
     DisQueue = xQueueCreate(20, sizeof(uint32_t));
+    AbnormalSituationDisQueue = xQueueCreate(20, sizeof(uint32_t));
+	LedModeQueue = xQueueCreate(20, sizeof(uint32_t));
     configASSERT(TempQueue != NULL);
     configASSERT(DisQueue != NULL);
+    configASSERT(AbnormalSituationDisQueue != NULL);
+	configASSERT(LedModeQueue != NULL);
 
     // 创建任务：限位开关 > 控制 > 采集 > 通信
+
+	//发送初始数据到消息队列(初始化)
+	BaseType_t ret;
+	uint8_t LedMode = 1;
+	ret = xQueueSend(LedModeQueue, &LedMode, 0);
+
     xTaskCreate(vTaskLimitSwitch,  "vTaskLimitSwitch",  256, NULL, 4, NULL);
+    xTaskCreate(vTaskAbnormalSituation,  "vTaskAbnormalSituation",  256, NULL, 4, NULL);
     xTaskCreate(vTaskControl,      "vTaskControl",      256, NULL, 3, NULL);
     xTaskCreate(vTaskCollect,      "vTaskCollect",      256, NULL, 2, NULL);
     xTaskCreate(vTaskCommunication,"vTaskCommunication", 256, NULL, 1, NULL);
+	xTaskCreate(vTaskLedMode,            "vTaskLedMode",            256, NULL, 1, NULL);
 
     // 启动调度器
     vTaskStartScheduler();
@@ -83,6 +107,55 @@ void vTaskLimitSwitch(void *pvParameters)
     }
 }
 
+// 异常情况处理任务实现（优先级4)
+void vTaskAbnormalSituation(void *pvParameters)
+{
+    BaseType_t ret;
+    uint8_t LedMode;
+    uint32_t dis = 0;
+    uint8_t motor_stopped_by_obstacle = 0;  // 0表示没有因为障碍物停止  1表示因为障碍物停止
+    uint8_t obstacle_clear_count = 0;       // 障碍物清除计数，连续3次都>10cm
+    char display_buffer[20];  // 用于字符串显示
+    while(1)
+    {
+        // 阻塞等待异常情况信号量（由vTaskCollect释放）
+        if(xSemaphoreTake(AbnormalSituationSemaphore, portMAX_DELAY) == pdTRUE)
+        {
+            if(xQueueReceive(AbnormalSituationDisQueue, &dis, 0) == pdTRUE)  // 非阻塞接收
+            {
+                sprintf(display_buffer, "dis:%04d", dis);
+                OLED_ShowString(2, 4, (uint8_t*)display_buffer, 16);
+
+                if(dis < 50)  // 检测到障碍物
+                {
+                    obstacle_clear_count = 0;
+                    if(!motor_stopped_by_obstacle)
+                    {
+                        motor_stop();
+                        motor_stopped_by_obstacle = 1;
+                    }
+                }
+                else  // 无障碍物
+                {
+                    if(motor_stopped_by_obstacle)
+                    {
+                        obstacle_clear_count++;
+                        if(obstacle_clear_count >= 3)
+                        {
+                            motor_start();
+                            LedMode = 1;
+                            ret = xQueueSend(LedModeQueue, &LedMode, 0);
+                            motor_stopped_by_obstacle = 0;
+                            obstacle_clear_count = 0;
+                        }
+                    }
+                }
+                vTaskDelay(300);  // 让出CPU
+            }
+        }
+    }
+}
+
 // 控制任务实现（优先级3）
 void vTaskControl(void *pvParameters)
 {
@@ -90,18 +163,14 @@ void vTaskControl(void *pvParameters)
 
     while(1)
     {
-        taskENTER_CRITICAL();
-        uint8_t rx_finished = USART3_RxFinished;
-        uint16_t rx_count = USART3_RxCount;
-        taskEXIT_CRITICAL();
-
-        // 如果接收到完整一帧命令
-        if(rx_finished == 1)
+        // 阻塞等待USART3接收完成信号量（由USART3 ISR释放）
+        if(xSemaphoreTake(USART3_RxSemaphore, portMAX_DELAY) == pdTRUE)
         {
             taskENTER_CRITICAL();
+            uint16_t rx_count = USART3_RxCount;
             memcpy(cmd_buffer, (char*)USART3_RxBuffer, rx_count);
             cmd_buffer[rx_count] = '\0';
-            
+
             // 去除换行符和回车符
             for(int i = 0; i < rx_count; i++)
             {
@@ -111,8 +180,8 @@ void vTaskControl(void *pvParameters)
                     break;
                 }
             }
-            
-			// 清除标志位和缓冲区
+
+            // 清除标志位和缓冲区
             USART3_RxFinished = 0;
             memset((void*)USART3_RxBuffer, 0, rx_count);
             taskEXIT_CRITICAL();
@@ -129,15 +198,11 @@ void vTaskControl(void *pvParameters)
                 // 收到 START
                 else if(strcmp(cmd_buffer, "START") == 0)
                 {
-
                     motor_start();
                     printf("START\r\n");
                 }
             }
         }
-
-        // 让出CPU，避免空循环
-        vTaskDelay(10);
     }
 }
 
@@ -154,6 +219,10 @@ void vTaskCollect(void *pvParameters)
         // 获取温度
         temp = get_tempture();
         dis = get_distance();
+
+        // 始终通知异常情况监视任务
+        xSemaphoreGive(AbnormalSituationSemaphore);
+        ret = xQueueSend(AbnormalSituationDisQueue, &dis, 0);
 
         // 发送到队列
         ret = xQueueSend(TempQueue, &temp, 0);
@@ -198,6 +267,42 @@ void vTaskCommunication(void *pvParameters)
         }
 
         // 让出CPU
-        vTaskDelay(80);
+        vTaskDelay(200);
     }
+}
+
+// 改变LED状态任务实现（优先级1）
+void vTaskLedMode(void *pvParameters)
+{
+	uint8_t LedMode;
+	while(1)
+	{
+		xQueueReceive(LedModeQueue, &LedMode, 0);
+		switch(LedMode)
+		{
+		case 0:  // 关闭
+			LED_OFF();
+			vTaskDelay(1000); // 让出CPU
+			break;
+			
+		case 1:  // 常亮
+			LED_ON();
+			vTaskDelay(1000); // 让出CPU
+			break;
+			
+		case 2:  // 慢闪
+			LED_ON();
+			vTaskDelay(700);
+			LED_OFF();
+			vTaskDelay(700);
+			break;
+			
+		case 3:  // 快闪
+			LED_ON();
+			vTaskDelay(100);
+			LED_OFF();
+			vTaskDelay(100);
+			break;
+		}
+	}
 }
