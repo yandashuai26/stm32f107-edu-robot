@@ -1,0 +1,330 @@
+#include "stm32f10x.h"                  // Device header
+#include "485.h"
+#include "timer.h"
+#include <string.h>
+static volatile uint8_t  USART1_RxBuffer[256];  // 接收不定长字符串的缓冲区
+static volatile uint16_t USART1_RxIndex = 0;    // 中断函数中使用 ,记录接收到的字符串索引
+static volatile uint8_t  USART1_RxFinished = 0; // 1 表示接收到一个完整的数据帧
+static volatile uint16_t USART1_RxCount = 0;  // 接收到的字符串数量
+
+/************************************************************
+
+// 4851 串口 串口1  PA9-->TX   PA10-->RX 
+
+****************************************************************/
+void usart1_Init()
+{
+// 开启GPIOC,USART,AFIO
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); 
+
+// ///将PA9引脚初始化为复用推挽输出 将PA10引脚初始化为上拉输入
+// // 将PA12引脚初始化为推挽输出  默认接收模式
+    GPIO_InitTypeDef GPIO_InitStructure;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure); // PA9
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);  // PA10
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    GPIO_ResetBits(GPIOA, GPIO_Pin_12); // PA12
+	
+// //USART1 9600 - 8 - 1 - 0 
+    USART_InitTypeDef USART_InitStructure;
+    USART_InitStructure.USART_BaudRate = 9600;
+    USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+    USART_InitStructure.USART_Mode = USART_Mode_Tx | USART_Mode_Rx;
+    USART_InitStructure.USART_Parity = USART_Parity_No;
+    USART_InitStructure.USART_StopBits = USART_StopBits_1;
+    USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+    USART_Init(USART1, &USART_InitStructure);
+	
+	
+// //使能中断
+    USART_ITConfig(USART1, USART_IT_IDLE, ENABLE);
+	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+ 
+// // 
+    NVIC_InitTypeDef NVIC_InitStructure;
+    NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;
+    NVIC_Init(&NVIC_InitStructure);
+// //设置NVIC为分组2(main.c)  抢占优先级1  响应优先级2
+
+// //使能usart1
+    USART_Cmd(USART1, ENABLE);
+}
+
+
+// //使用usart1 发送一个字节
+void Serial1_SendByte(uint8_t Byte)
+{
+	USART_SendData(USART1, Byte);
+	while (USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET);
+}
+
+// //使用usart1 发送一个字符串
+void Serial1_SendString(char *String)
+{
+	
+	
+	uint8_t i;
+	for (i = 0; String[i] != '\0'; i ++)
+	{
+		Serial1_SendByte(String[i]);
+	}
+}
+
+/************************************************************
+
+// 4851 串口 串口1  PA9-->TX   PA10-->RX   PA12-->EN
+// 											1 为发送 0为接收
+****************************************************************/
+static const uint8_t s_CRCHi[] = {
+    0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0,
+    0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41,
+    0x00, 0xC1, 0x81, 0x40, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0,
+    0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40,
+    0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1,
+    0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41,
+    0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1,
+    0x81, 0x40, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41,
+    0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0,
+    0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x00, 0xC1, 0x81, 0x40,
+    0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1,
+    0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40,
+    0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0,
+    0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x00, 0xC1, 0x81, 0x40,
+    0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0,
+    0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40,
+    0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0,
+    0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41,
+    0x00, 0xC1, 0x81, 0x40, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0,
+    0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41,
+    0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0,
+    0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x00, 0xC1, 0x81, 0x40,
+    0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1,
+    0x81, 0x40, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41,
+    0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0,
+    0x80, 0x41, 0x00, 0xC1, 0x81, 0x40
+} ;
+const uint8_t s_CRCLo[] = {
+	0x00, 0xC0, 0xC1, 0x01, 0xC3, 0x03, 0x02, 0xC2, 0xC6, 0x06,
+	0x07, 0xC7, 0x05, 0xC5, 0xC4, 0x04, 0xCC, 0x0C, 0x0D, 0xCD,
+	0x0F, 0xCF, 0xCE, 0x0E, 0x0A, 0xCA, 0xCB, 0x0B, 0xC9, 0x09,
+	0x08, 0xC8, 0xD8, 0x18, 0x19, 0xD9, 0x1B, 0xDB, 0xDA, 0x1A,
+	0x1E, 0xDE, 0xDF, 0x1F, 0xDD, 0x1D, 0x1C, 0xDC, 0x14, 0xD4,
+	0xD5, 0x15, 0xD7, 0x17, 0x16, 0xD6, 0xD2, 0x12, 0x13, 0xD3,
+	0x11, 0xD1, 0xD0, 0x10, 0xF0, 0x30, 0x31, 0xF1, 0x33, 0xF3,
+	0xF2, 0x32, 0x36, 0xF6, 0xF7, 0x37, 0xF5, 0x35, 0x34, 0xF4,
+	0x3C, 0xFC, 0xFD, 0x3D, 0xFF, 0x3F, 0x3E, 0xFE, 0xFA, 0x3A,
+	0x3B, 0xFB, 0x39, 0xF9, 0xF8, 0x38, 0x28, 0xE8, 0xE9, 0x29,
+	0xEB, 0x2B, 0x2A, 0xEA, 0xEE, 0x2E, 0x2F, 0xEF, 0x2D, 0xED,
+	0xEC, 0x2C, 0xE4, 0x24, 0x25, 0xE5, 0x27, 0xE7, 0xE6, 0x26,
+	0x22, 0xE2, 0xE3, 0x23, 0xE1, 0x21, 0x20, 0xE0, 0xA0, 0x60,
+	0x61, 0xA1, 0x63, 0xA3, 0xA2, 0x62, 0x66, 0xA6, 0xA7, 0x67,
+	0xA5, 0x65, 0x64, 0xA4, 0x6C, 0xAC, 0xAD, 0x6D, 0xAF, 0x6F,
+	0x6E, 0xAE, 0xAA, 0x6A, 0x6B, 0xAB, 0x69, 0xA9, 0xA8, 0x68,
+	0x78, 0xB8, 0xB9, 0x79, 0xBB, 0x7B, 0x7A, 0xBA, 0xBE, 0x7E,
+	0x7F, 0xBF, 0x7D, 0xBD, 0xBC, 0x7C, 0xB4, 0x74, 0x75, 0xB5,
+	0x77, 0xB7, 0xB6, 0x76, 0x72, 0xB2, 0xB3, 0x73, 0xB1, 0x71,
+	0x70, 0xB0, 0x50, 0x90, 0x91, 0x51, 0x93, 0x53, 0x52, 0x92,
+	0x96, 0x56, 0x57, 0x97, 0x55, 0x95, 0x94, 0x54, 0x9C, 0x5C,
+	0x5D, 0x9D, 0x5F, 0x9F, 0x9E, 0x5E, 0x5A, 0x9A, 0x9B, 0x5B,
+	0x99, 0x59, 0x58, 0x98, 0x88, 0x48, 0x49, 0x89, 0x4B, 0x8B,
+	0x8A, 0x4A, 0x4E, 0x8E, 0x8F, 0x4F, 0x8D, 0x4D, 0x4C, 0x8C,
+	0x44, 0x84, 0x85, 0x45, 0x87, 0x47, 0x46, 0x86, 0x82, 0x42,
+	0x43, 0x83, 0x41, 0x81, 0x80, 0x40
+};
+
+/*
+*********************************************************************************************************
+// * 函 数 名: CRC16_Modbus
+// * 功能说明: 计算CRC 遵循Modbus协议。
+// * 参    数: _pBuf : 参与校验的数据
+// *			  _		usLen : 数据长度
+// * 返 回 值: 16位校验值， 按照Modbus 先发送低字节，后发送高字节。
+*
+// *   所有可能的CRC值都被预装在两个数组当中，当计算报文时可以简单的索引即可；
+// *   一个数组包含有16位CRC域的所有256个可能的高位字节，另一个数组含有低位字节的值；
+// *   这种索引访问CRC的方式提供了比对报文缓冲区的每个字符都计算新的CRC更快的方法。
+*********************************************************************************************************
+*/
+uint16_t CRC16_Modbus(uint8_t *_pBuf, uint16_t _usLen)
+{
+	uint8_t ucCRCHi = 0xFF; /* 高CRC字节初始化 */
+	uint8_t ucCRCLo = 0xFF; /* 低CRC 字节初始化 */
+	uint16_t usIndex;  /* CRC循环中的索引 */
+
+    while (_usLen--)
+    {
+		usIndex = ucCRCHi ^ *_pBuf++; /* 计算CRC */
+		ucCRCHi = ucCRCLo ^ s_CRCHi[usIndex];
+		ucCRCLo = s_CRCLo[usIndex];
+    }
+    return ((uint16_t)ucCRCHi << 8 | ucCRCLo);
+}
+
+// // 485的初始化
+void RS485_Init()
+{
+	usart1_Init();
+}
+// // 485发送字符串
+void RS485_UartWrite(char* String)
+{
+    uint8_t i=0;
+  	// 485 方向置为发送
+    GPIO_SetBits(GPIOA,GPIO_Pin_12);
+    delay_ms(3);
+	for (i = 0; String[i] != '\0'; i ++)
+	{
+		Serial1_SendByte(String[i]); 
+	}
+	delay_ms(3);
+  	// 485 方向置为接收
+    GPIO_ResetBits(GPIOA,GPIO_Pin_12);
+}
+
+// 使用485发送指令
+// uAddr 设备地址  opr 操作码 03-->读  06-->写 uReg 寄存器地址
+// uData 写操作时发送的数据  读操作时读取数据个数
+void RS485_TX_Opr(uint8_t uAddr,uint8_t opr,uint16_t uReg,uint16_t uData)
+{
+	uint8_t  tx_date[8];
+	uint16_t crc;
+	
+	tx_date[0] =  uAddr;
+	tx_date[1] = opr;
+	tx_date[2] = uReg >> 8;
+	tx_date[3] = uReg;
+	tx_date[4] = uData >> 8;
+	tx_date[5] = uData;
+	
+    // crc校验
+	crc = CRC16_Modbus(tx_date,6);
+	tx_date[6] = crc >> 8;  // crc是16位,取高八位
+	tx_date[7] = crc & 0xFF;  // 取低八位
+
+    // 485 方向置为发送
+    GPIO_SetBits(GPIOA, GPIO_Pin_12);
+    delay_ms(3);
+	
+	for(uint8_t i = 0; i < 8; i++)
+	{
+		Serial1_SendByte(tx_date[i]);
+	}
+
+    delay_ms(3);
+    // 485 方向置为接收
+    GPIO_ResetBits(GPIOA, GPIO_Pin_12);
+}
+
+// 485接收数据 + 处理
+uint32_t RS485_RX_Date(void)
+{
+    uint32_t result = 0;
+    
+    if (USART1_RxFinished)
+    {
+        USART1_RxFinished = 0;  // 清除标志
+        
+        // 检查接收到的数据长度（Modbus 响应最少8字节）
+        if (USART1_RxCount > 5)
+        {
+            // 验证 CRC
+            uint16_t crc_calc = CRC16_Modbus((uint8_t*)USART1_RxBuffer, USART1_RxCount - 2);
+            uint16_t crc_recv = (USART1_RxBuffer[USART1_RxCount - 2] << 8) | USART1_RxBuffer[USART1_RxCount - 1];
+            
+            if (crc_calc == crc_recv)
+            {
+                // 提取数据（从第4字节开始）
+                // 返回的是16位数据
+                result = (USART1_RxBuffer[3] << 8) | USART1_RxBuffer[4];
+            }
+        }
+        // 清空接收缓冲区
+        memset((void*)USART1_RxBuffer, 0, USART1_RxCount);
+        USART1_RxCount = 0;
+    }
+    
+    return result;
+}
+
+// 读取温度值
+uint32_t get_tempture(void)
+{
+	RS485_TX_Opr(0x12,0x03,0x0102,0x0001);
+	delay_ms(100);
+    if (USART1_RxFinished)
+    {
+		float temp = RS485_RX_Date() / 10;
+        return temp;
+    }
+	else
+	{
+  		// 超时返回错误值
+        return 0xffffffff;
+	}
+}
+
+
+// 读取距离值
+uint32_t get_distance(void)
+{
+	RS485_TX_Opr(0x12,0x03,0x0101,0x0001);
+	delay_ms(100);
+    if (USART1_RxFinished)
+    {
+		float dis = RS485_RX_Date();
+        return dis;
+    }
+	else
+	{
+ 		// 超时返回错误值
+        return 0xffffffff;
+	}
+}
+
+//usart1中断接收不定长数据
+void USART1_IRQHandler(void)
+{
+    // 如果是接收中断
+    if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
+    {
+        // 读取数据并存入缓冲区
+        uint8_t data = USART_ReceiveData(USART1);
+        
+        // 防止缓冲区溢出
+        if (USART1_RxIndex < 256)
+        {
+            USART1_RxBuffer[USART1_RxIndex++] = data;
+        }
+        //手动清除标志位
+        USART_ClearITPendingBit(USART1, USART_IT_RXNE);
+    }
+    
+    //空闲中断
+    if (USART_GetITStatus(USART1, USART_IT_IDLE) != RESET)
+    {
+        // 清除空闲中断标志
+        volatile uint16_t temp = USART1->SR;
+        temp = USART1->DR;
+        (void)temp;//temp没有用,这样写是为了清除硬件标志位
+
+        USART1_RxCount = USART1_RxIndex;//字符个数
+
+        USART1_RxFinished = 1;//标志位置1 , 接收到一帧数据
+        USART1_RxIndex = 0;//接收索引为0
+  		// 清除一次
+        USART_ClearITPendingBit(USART1, USART_IT_IDLE);
+    }
+}
