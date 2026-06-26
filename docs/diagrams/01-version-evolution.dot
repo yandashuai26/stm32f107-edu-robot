@@ -1,0 +1,62 @@
+digraph G {
+    rankdir=TB;
+    fontname="Microsoft YaHei";
+    fontsize=14;
+    label="STM32F107VCT6 教育机器人 — 版本架构演进图";
+    labelloc=t;
+    nodesep=0.6;
+    ranksep=0.8;
+    compound=true;
+    newrank=true;
+    bgcolor="#fafafa";
+
+    subgraph cluster_v1 {
+        label="v1 裸机时代（任务1）";
+        fontsize=16;
+        fontname="Microsoft YaHei";
+        style="filled";
+        fillcolor="#e3f2fd";
+        color="#1565c0";
+        penwidth=2;
+
+        v1a [label="v1.0-bare-metal-compare\n━━━━━━━━━━━━━━━━\n架构: 前后台轮询\n速度: 未设置\n回退: 5900脉冲\nRTOS: 未启用\n稳定性: 未验证",
+            shape=box, style="filled,rounded", fillcolor="#e3f2fd", fontsize=10, fontname="Microsoft YaHei"];
+
+        v1b [label="v1.1-bare-metal-stable\n━━━━━━━━━━━━━━━━\n架构: 前后台轮询\n速度: 1000 pps\n回退: 3050脉冲\nRTOS: 未启用\n稳定性: 60min+验证",
+            shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=10, fontname="Microsoft YaHei"];
+    }
+
+    subgraph cluster_v2 {
+        label="v2 FreeRTOS 4任务（任务2）";
+        fontsize=16;
+        fontname="Microsoft YaHei";
+        style="filled";
+        fillcolor="#c8e6c9";
+        color="#2e7d32";
+        penwidth=2;
+
+        v2a [label="v2.0-freertos-4task\n━━━━━━━━━━━━━━━━\n架构: FreeRTOS 4任务\n任务: 限位/控制/采集/通信\n速度: 1000 pps\nIPC: 信号量 + 2队列\n状态: 全局变量",
+            shape=box, style="filled,rounded", fillcolor="#c8e6c9", fontsize=10, fontname="Microsoft YaHei"];
+
+        v2b [label="v2.1-freertos-struct-state\n━━━━━━━━━━━━━━━━\n架构: FreeRTOS 4任务\n任务: 限位/控制/采集/通信\n速度: 1500 pps\nIPC: 信号量 + 2队列\n状态: motor_t 结构体",
+            shape=box, style="filled,rounded", fillcolor="#a5d6a7", fontsize=10, fontname="Microsoft YaHei"];
+    }
+
+    subgraph cluster_v3 {
+        label="v3 FreeRTOS 7任务（任务3）";
+        fontsize=16;
+        fontname="Microsoft YaHei";
+        style="filled";
+        fillcolor="#ffcdd2";
+        color="#c62828";
+        penwidth=2;
+
+        v3 [label="v3.0-freertos-7task\n━━━━━━━━━━━━━━━━\n架构: FreeRTOS 7任务\n任务: 限位/异常/控制/采集/\n      中点到达/通信/LED\n速度: 1000 pps\nIPC: 4信号量 + 4队列\n状态: motor_t 结构体\n特色: 斜坡加减速 + 中点定位",
+            shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=10, fontname="Microsoft YaHei"];
+    }
+
+    v1a -> v1b [label=" 修复稳定性\n 修正参数", fontsize=10, fontname="Microsoft YaHei"];
+    v1b -> v2a [label=" 引入 FreeRTOS\n 拆分为4任务", fontsize=10, fontname="Microsoft YaHei"];
+    v2a -> v2b [label=" 引入结构体\n 状态管理", fontsize=10, fontname="Microsoft YaHei"];
+    v2b -> v3 [label=" 新增3任务\n 全信号量驱动", fontsize=10, fontname="Microsoft YaHei"];
+}

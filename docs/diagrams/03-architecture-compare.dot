@@ -1,0 +1,65 @@
+digraph G {
+    rankdir=LR;
+    fontname="Microsoft YaHei";
+    fontsize=14;
+    label="STM32F107VCT6 — 三代架构对比";
+    labelloc=t;
+    nodesep=0.4;
+    ranksep=0.6;
+    compound=true;
+    newrank=true;
+    bgcolor="#fafafa";
+
+    subgraph cluster_gen1 {
+        label="v1 裸机前后台（任务1）";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#e3f2fd"; color="#1565c0"; penwidth=2;
+
+        g1_init [label="bsp_init()\nGPIO/TIM/USART\nADC/I2C/OLED", shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=9, fontname="Microsoft YaHei"];
+        g1_loop [label="while(1) 超级循环\n━━━━━━━━━━━━━━\n1. 1s采集温度/距离\n2. 限位->停->换向->回退\n3. 目标到达->重置->重启\n4. 温度>500->慢闪告警\n5. 距离<40->停机+快闪\n6. LED模式切换\n7. 电机状态保持",
+            shape=box, style="filled,rounded", fillcolor="#90caf9", fontsize=9, fontname="Microsoft YaHei"];
+        g1_isr [label="TIM1_UP_IRQHandler\n1ms 系统时基\nsysTick_ms 0~5000", shape=box, style="filled,dashed,rounded", fillcolor="#e3f2fd", fontsize=9, fontname="Microsoft YaHei"];
+        g1_exec [label="执行特征\n━━━━━━━━\nX 顺序执行\nX 无优先级\nX 100% CPU忙等\nX 实时性差",
+            shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=9, fontname="Microsoft YaHei"];
+
+        g1_init -> g1_loop [style=bold];
+        g1_isr -> g1_loop [style=dotted, label="1ms"];
+        g1_loop -> g1_exec [style=bold];
+    }
+
+    subgraph cluster_gen2 {
+        label="v2 FreeRTOS 4任务（任务2）";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#c8e6c9"; color="#2e7d32"; penwidth=2;
+
+        g2_tasks [label="4个独立任务\n━━━━━━━━━━━━━━\n1. vTaskLimitSwitch (prio4)\n    信号量触发 50ms去抖\n2. vTaskControl (prio3)\n    10ms轮询 STOP/START\n3. vTaskCollect (prio2)\n    100ms 温度+距离\n4. vTaskCommunication (prio1)\n    80ms printf+OLED",
+            shape=box, style="filled,rounded", fillcolor="#a5d6a7", fontsize=9, fontname="Microsoft YaHei"];
+        g2_ipc [label="IPC 机制\n━━━━━━━━\nLimitSemaphore x1\nTempQueue x1\nDisQueue x1", shape=box, style="filled,rounded", fillcolor="#81c784", fontsize=9, fontname="Microsoft YaHei"];
+        g2_exec [label="执行特征\n━━━━━━━━\nV 抢占式调度\nV 优先级保证\nV 阻塞时释放CPU\nV 实时性好",
+            shape=box, style="filled,rounded", fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
+
+        g2_tasks -> g2_ipc [style=bold];
+        g2_ipc -> g2_exec [style=bold];
+    }
+
+    subgraph cluster_gen3 {
+        label="v3 FreeRTOS 7任务（任务3）";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#ffcdd2"; color="#c62828"; penwidth=2;
+
+        g3_tasks [label="7个独立任务\n━━━━━━━━━━━━━━\n1. vTaskLimitSwitch (prio4)\n2. vTaskAbnormalSit. (prio4)\n3. vTaskControl (prio3)\n4. vTaskCollect (prio2)\n5. vTaskMotorReached (prio2)\n6. vTaskCommu. (prio1)\n7. vTaskLedMode (prio1)",
+            shape=box, style="filled,rounded", fillcolor="#ef9a9a", fontsize=9, fontname="Microsoft YaHei"];
+        g3_ipc [label="IPC 机制\n━━━━━━━━\n4个信号量\n4个消息队列\n全事件驱动", shape=box, style="filled,rounded", fillcolor="#ef5350", fontsize=9, fontname="Microsoft YaHei"];
+        g3_features [label="新增特性\n━━━━━━━━\nV 障碍物自动检测恢复\nV 中点定位(3050脉冲)\nV LED 4模式独立控制\nV 斜坡加减速(1Hz/脉冲)\nV motor_t 结构体管理\nV 零轮询",
+            shape=box, style="filled,rounded", fillcolor="#e57373", fontsize=9, fontname="Microsoft YaHei"];
+        g3_exec [label="执行特征\n━━━━━━━━\nV 抢占式调度\nV 安全优先\nV 扩展性强\nV 实时性最佳",
+            shape=box, style="filled,rounded", fillcolor="#ef9a9a", fontsize=9, fontname="Microsoft YaHei"];
+
+        g3_tasks -> g3_ipc [style=bold];
+        g3_ipc -> g3_features [style=bold];
+        g3_features -> g3_exec [style=bold];
+    }
+
+    g1_exec -> g2_tasks [label="引入 FreeRTOS", fontsize=11, fontname="Microsoft YaHei", style=bold, color="#1565c0"];
+    g2_exec -> g3_tasks [label="扩展任务\n全事件驱动", fontsize=11, fontname="Microsoft YaHei", style=bold, color="#c62828"];
+}

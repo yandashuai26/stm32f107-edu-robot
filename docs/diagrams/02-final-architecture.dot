@@ -1,0 +1,139 @@
+digraph G {
+    rankdir=TB;
+    fontname="Microsoft YaHei";
+    fontsize=14;
+    label="STM32F107VCT6 — v3.0 最终版 7任务架构图";
+    labelloc=t;
+    nodesep=0.3;
+    ranksep=0.5;
+    compound=true;
+    newrank=true;
+    bgcolor="#fafafa";
+
+    subgraph cluster_isr {
+        label="中断层 (ISR)";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#fff3e0"; color="#e65100"; penwidth=2;
+
+        exti [label="EXTI15_10\nPC13/PC14 限位开关\n优先级: 0,0", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
+        tim5 [label="TIM5\nPWM脉冲+计数\n优先级: 1,2", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
+        usart3_i [label="USART3\n串口接收\n优先级: 1,2", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
+        tim1 [label="TIM1_UP\n1ms 系统时基\n优先级: 3,2", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
+    }
+
+    subgraph cluster_sem {
+        label="信号量（事件通知）";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#e8eaf6"; color="#283593"; penwidth=2;
+
+        sem1 [label="LimitSemaphore\nEXTI -> 限位任务", shape=component, style=filled, fillcolor="#c5cae9", fontsize=9, fontname="Microsoft YaHei"];
+        sem2 [label="AbnormalSituationSemaphore\n采集任务 -> 异常任务", shape=component, style=filled, fillcolor="#c5cae9", fontsize=9, fontname="Microsoft YaHei"];
+        sem3 [label="USART3_RxSemaphore\nUSART3 -> 控制任务", shape=component, style=filled, fillcolor="#c5cae9", fontsize=9, fontname="Microsoft YaHei"];
+        sem4 [label="MotorTargetReachedSemaphore\nTIM5 -> 中点任务", shape=component, style=filled, fillcolor="#c5cae9", fontsize=9, fontname="Microsoft YaHei"];
+    }
+
+    subgraph cluster_queue {
+        label="消息队列（数据传输）";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#e8f5e9"; color="#1b5e20"; penwidth=2;
+
+        q1 [label="TempQueue\nuint32 x 20\n温度数据", shape=cylinder, style=filled, fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
+        q2 [label="DisQueue\nuint32 x 20\n距离数据", shape=cylinder, style=filled, fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
+        q3 [label="AbnormalSituationDisQueue\nuint32 x 20", shape=cylinder, style=filled, fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
+        q4 [label="LedModeQueue\nuint32 x 20\nLED模式指令", shape=cylinder, style=filled, fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
+    }
+
+    subgraph cluster_tasks {
+        label="FreeRTOS 任务层";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#f5f5f5"; color="#424242"; penwidth=2;
+
+        subgraph cluster_prio4 {
+            label="优先级 4（最高）";
+            fontsize=12; fontname="Microsoft YaHei";
+            style="filled"; fillcolor="#ffebee"; color="#b71c1c";
+
+            tls [label="vTaskLimitSwitch\n━━━━━━━━━━━━\n栈: 256 words\n触发: LimitSemaphore\n━━━━━━━━━━━━\n1. 等待信号量\n2. 50ms 去抖\n3. 读取触发引脚\n4. 清零+换向\n5. 300ms 冷却期",
+                shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=9, fontname="Microsoft YaHei"];
+
+            tas [label="vTaskAbnormalSituation\n━━━━━━━━━━━━\n栈: 256 words\n触发: AbnormalSitSemaphore\n━━━━━━━━━━━━\n1. 等待信号量\n2. 读取距离\n3. dis < 50mm -> 停机\n4. 连续3次>50mm -> 恢复",
+                shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=9, fontname="Microsoft YaHei"];
+        }
+
+        subgraph cluster_prio3 {
+            label="优先级 3";
+            fontsize=12; fontname="Microsoft YaHei";
+            style="filled"; fillcolor="#fff8e1"; color="#f57f17";
+
+            tctl [label="vTaskControl\n━━━━━━━━━━━━\n栈: 256 words\n触发: USART3_RxSemaphore\n━━━━━━━━━━━━\n1. 等待信号量\n2. 临界区拷贝指令\n3. STOP -> motor_stop()\n4. START -> motor_start()",
+                shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
+        }
+
+        subgraph cluster_prio2 {
+            label="优先级 2";
+            fontsize=12; fontname="Microsoft YaHei";
+            style="filled"; fillcolor="#e3f2fd"; color="#0d47a1";
+
+            tcol [label="vTaskCollect\n━━━━━━━━━━━━\n栈: 256 words\n周期: 100ms\n━━━━━━━━━━━━\n1. RS485读温度\n2. RS485读距离\n3. 数据入3个队列\n4. 释放异常信号量",
+                shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=9, fontname="Microsoft YaHei"];
+
+            tmr [label="vTaskMotorReached\n━━━━━━━━━━━━\n栈: 256 words\n触发: MTR Semaphore\n━━━━━━━━━━━━\n1. 等待信号量\n2. 目标到达处理\n3. 显示 Reached\n4. 重设 10000000",
+                shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=9, fontname="Microsoft YaHei"];
+        }
+
+        subgraph cluster_prio1 {
+            label="优先级 1（最低）";
+            fontsize=12; fontname="Microsoft YaHei";
+            style="filled"; fillcolor="#f3e5f5"; color="#4a148c";
+
+            tcom [label="vTaskCommunication\n━━━━━━━━━━━━\n栈: 256 words\n周期: 200ms\n━━━━━━━━━━━━\n1. 读取 TempQueue\n2. 读取 DisQueue\n3. OLED 显示\n4. printf 串口输出",
+                shape=box, style="filled,rounded", fillcolor="#e1bee7", fontsize=9, fontname="Microsoft YaHei"];
+
+            tled [label="vTaskLedMode\n━━━━━━━━━━━━\n栈: 256 words\n触发: LedModeQueue\n━━━━━━━━━━━━\n模式0: 关闭\n模式1: 常亮\n模式2: 700ms慢闪\n模式3: 100ms快闪",
+                shape=box, style="filled,rounded", fillcolor="#e1bee7", fontsize=9, fontname="Microsoft YaHei"];
+        }
+    }
+
+    subgraph cluster_hw {
+        label="硬件外设";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#e0f2f1"; color="#004d40"; penwidth=2;
+
+        motor [label="电机 UIM240\nPWM+DIR+ENA", shape=box, style="filled,rounded", fillcolor="#b2dfdb", fontsize=9, fontname="Microsoft YaHei"];
+        oled [label="SSD1306 OLED\n128x64 I2C", shape=box, style="filled,rounded", fillcolor="#b2dfdb", fontsize=9, fontname="Microsoft YaHei"];
+        led [label="LED PE3/PE4\n状态指示", shape=box, style="filled,rounded", fillcolor="#b2dfdb", fontsize=9, fontname="Microsoft YaHei"];
+        dyp [label="DYP-A02\nRS485 Modbus", shape=box, style="filled,rounded", fillcolor="#b2dfdb", fontsize=9, fontname="Microsoft YaHei"];
+        temp [label="温度传感器\nRS485 Modbus", shape=box, style="filled,rounded", fillcolor="#b2dfdb", fontsize=9, fontname="Microsoft YaHei"];
+        host [label="上位机\nUSART3", shape=box, style="filled,rounded", fillcolor="#b2dfdb", fontsize=9, fontname="Microsoft YaHei"];
+    }
+
+    exti -> sem1 [label="xSemaphoreGiveFromISR", fontsize=7, fontname="Microsoft YaHei", color="#c62828"];
+    tim5 -> sem4 [label="xSemaphoreGiveFromISR", fontsize=7, fontname="Microsoft YaHei", color="#c62828"];
+    usart3_i -> sem3 [label="xSemaphoreGiveFromISR", fontsize=7, fontname="Microsoft YaHei", color="#c62828"];
+
+    sem1 -> tls [label="xSemaphoreTake", fontsize=7, fontname="Microsoft YaHei", color="#c62828"];
+    sem2 -> tas [label="xSemaphoreTake", fontsize=7, fontname="Microsoft YaHei", color="#c62828"];
+    sem3 -> tctl [label="xSemaphoreTake", fontsize=7, fontname="Microsoft YaHei", color="#c62828"];
+    sem4 -> tmr [label="xSemaphoreTake", fontsize=7, fontname="Microsoft YaHei", color="#c62828"];
+
+    tcol -> q1 [label="xQueueSend", fontsize=7, fontname="Microsoft YaHei", color="#1b5e20"];
+    tcol -> q2 [label="xQueueSend", fontsize=7, fontname="Microsoft YaHei", color="#1b5e20"];
+    tcol -> q3 [label="xQueueSend", fontsize=7, fontname="Microsoft YaHei", color="#1b5e20"];
+    tcol -> sem2 [label="xSemaphoreGive", fontsize=7, fontname="Microsoft YaHei", color="#c62828", style=dashed];
+    tas -> q4 [label="xQueueSend", fontsize=7, fontname="Microsoft YaHei", color="#1b5e20"];
+
+    q1 -> tcom [label="xQueueReceive", fontsize=7, fontname="Microsoft YaHei", color="#1b5e20"];
+    q2 -> tcom [label="xQueueReceive", fontsize=7, fontname="Microsoft YaHei", color="#1b5e20"];
+    q3 -> tas [label="xQueueReceive", fontsize=7, fontname="Microsoft YaHei", color="#1b5e20"];
+    q4 -> tled [label="xQueueReceive", fontsize=7, fontname="Microsoft YaHei", color="#1b5e20"];
+
+    tls -> motor [label="方向/脉冲", fontsize=7, fontname="Microsoft YaHei", color="#004d40"];
+    tctl -> motor [label="STOP/START", fontsize=7, fontname="Microsoft YaHei", color="#004d40"];
+    tcom -> oled [label="I2C显示", fontsize=7, fontname="Microsoft YaHei", color="#004d40"];
+    tcom -> host [label="printf", fontsize=7, fontname="Microsoft YaHei", color="#004d40"];
+    tled -> led [label="GPIO", fontsize=7, fontname="Microsoft YaHei", color="#004d40"];
+    tcol -> dyp [label="RS485读", fontsize=7, fontname="Microsoft YaHei", color="#004d40"];
+    tcol -> temp [label="RS485读", fontsize=7, fontname="Microsoft YaHei", color="#004d40"];
+    host -> usart3_i [label="指令", fontsize=7, fontname="Microsoft YaHei", color="#004d40", style=dashed];
+    exti -> tls [label="记录引脚", fontsize=7, fontname="Microsoft YaHei", style=dotted, color="#e65100"];
+}

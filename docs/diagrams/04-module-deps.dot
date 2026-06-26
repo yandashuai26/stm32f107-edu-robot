@@ -1,0 +1,86 @@
+digraph G {
+    rankdir=TB;
+    fontname="Microsoft YaHei";
+    fontsize=14;
+    label="STM32F107VCT6 — 模块依赖关系图";
+    labelloc=t;
+    nodesep=0.3;
+    ranksep=0.5;
+    compound=true;
+    bgcolor="#fafafa";
+
+    subgraph cluster_app {
+        label="应用层";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#e8f5e9"; color="#2e7d32"; penwidth=2;
+
+        main [label="main.c\n━━━━━━━━\nbsp_init()\nmotor_set_speed(1000)\nFreeRTOS_Start()", shape=box, style="filled,rounded", fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
+        freertos_demo [label="FreeRTOS_demo.c\n━━━━━━━━\n7任务创建\n信号量/队列初始化\nvTaskStartScheduler()", shape=box, style="filled,rounded", fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
+    }
+
+    subgraph cluster_bsp {
+        label="BSP 驱动层";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#fff3e0"; color="#ef6c00"; penwidth=2;
+
+        bsp_h [label="bsp.h\n━━━━━━\n总入口头文件\n汇总所有模块", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
+        bsp_c [label="bsp.c\n━━━━━━\n统一外设初始化\ndelay_ms()", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
+    }
+
+    subgraph cluster_modules {
+        label="功能模块";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#e3f2fd"; color="#1565c0"; penwidth=2;
+
+        gpio [label="gpio.c/h\n━━━━━━━\nPC13/PC14 EXTI\nLimitSemaphore 创建", shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=9, fontname="Microsoft YaHei"];
+        motor_m [label="motor.c/h\n━━━━━━━\nmotor_t 结构体\n斜坡加减速\n信号量管理\n冷却期机制", shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=9, fontname="Microsoft YaHei"];
+        led_m [label="led.c/h\n━━━━━━━\nPE3/PE4 控制\n4种闪烁模式", shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=9, fontname="Microsoft YaHei"];
+        timer_m [label="timer.c/h\n━━━━━━━\nTIM1 1ms时基\nTIM5 PWM配置", shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=9, fontname="Microsoft YaHei"];
+        usart_m [label="usart.c/h\n━━━━━━━\nUSART3 printf\n中断接收\nRxSemaphore", shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=9, fontname="Microsoft YaHei"];
+        oled_m [label="oled.c/h\n━━━━━━━\nSSD1306 I2C\n128x64 显示\noledfont.h 字库", shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=9, fontname="Microsoft YaHei"];
+        rs485 [label="485.c/h\n━━━━━━━\nRS485收发\nModbus传感器通信", shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=9, fontname="Microsoft YaHei"];
+    }
+
+    subgraph cluster_rtos {
+        label="FreeRTOS 内核";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#f3e5f5"; color="#6a1b9a"; penwidth=2;
+
+        rtos_inc [label="freertos/inc/\n━━━━━━━━\nFreeRTOS.h\ntask.h\nqueue.h\nsemphr.h\nFreeRTOSConfig.h", shape=box, style="filled,rounded", fillcolor="#e1bee7", fontsize=9, fontname="Microsoft YaHei"];
+        rtos_src [label="freertos/src/\n━━━━━━━━\ntasks.c\nqueue.c\nheap_4.c\nport.c\ntimers.c", shape=box, style="filled,rounded", fillcolor="#e1bee7", fontsize=9, fontname="Microsoft YaHei"];
+    }
+
+    subgraph cluster_hal {
+        label="STM32 HAL/驱动层";
+        fontsize=14; fontname="Microsoft YaHei";
+        style="filled"; fillcolor="#eceff1"; color="#546e7a"; penwidth=2;
+
+        cmsis [label="Drivers/Start/\n━━━━━━━━\nstm32f10x.h\ncore_cm3.c\nsystem_stm32f10x.c\nstartup_cl.s", shape=box, style="filled,rounded", fillcolor="#cfd8dc", fontsize=9, fontname="Microsoft YaHei"];
+        spl [label="Drivers/Library/\n━━━━━━━━\nstm32f10x_gpio.c\nstm32f10x_tim.c\nstm32f10x_usart.c\nstm32f10x_rcc.c\nstm32f10x_i2c.c\nstm32f10x_dma.c\nstm32f10x_exti.c\nstm32f10x_adc.c\n...", shape=box, style="filled,rounded", fillcolor="#cfd8dc", fontsize=9, fontname="Microsoft YaHei"];
+    }
+
+    main -> bsp_h [style=bold, color="#2e7d32"];
+    main -> freertos_demo [style=bold, color="#2e7d32"];
+    freertos_demo -> bsp_h [style=bold, color="#2e7d32"];
+    freertos_demo -> rtos_inc [style=bold, color="#6a1b9a"];
+
+    bsp_h -> gpio [color="#1565c0"];
+    bsp_h -> motor_m [color="#1565c0"];
+    bsp_h -> led_m [color="#1565c0"];
+    bsp_h -> timer_m [color="#1565c0"];
+    bsp_h -> usart_m [color="#1565c0"];
+    bsp_h -> oled_m [color="#1565c0"];
+    bsp_h -> rs485 [color="#1565c0"];
+
+    bsp_c -> bsp_h [style=dashed, color="#ef6c00"];
+
+    gpio -> spl [style=dotted, color="#78909c"];
+    motor_m -> spl [style=dotted, color="#78909c"];
+    timer_m -> spl [style=dotted, color="#78909c"];
+    usart_m -> spl [style=dotted, color="#78909c"];
+    oled_m -> spl [style=dotted, color="#78909c"];
+    rs485 -> spl [style=dotted, color="#78909c"];
+    gpio -> cmsis [style=dotted, color="#78909c"];
+    motor_m -> cmsis [style=dotted, color="#78909c"];
+    rtos_src -> cmsis [style=dotted, color="#78909c"];
+}

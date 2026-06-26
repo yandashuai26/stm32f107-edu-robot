@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-本仓库包含教育机器人控制系统的五个递进版本，展示了从前后台裸机架构到 FreeRTOS 实时多任务架构的完整演进过程。每个版本在前一版本基础上逐步优化，涵盖了嵌入式软件开发中常用的设计模式和技术要点。
+本仓库包含教育机器人控制系统的七个递进版本，展示了从前后台裸机架构到 FreeRTOS 实时多任务架构的完整演进过程。每个版本在前一版本基础上逐步优化，涵盖了嵌入式软件开发中常用的设计模式和技术要点。
 
 ### 核心功能
 
@@ -38,29 +38,35 @@
 
 | 版本 | 目录 | 架构 | 核心亮点 |
 |------|------|------|----------|
-| **任务1 — 比较版** | [`task1-bare-metal-compare/`](task1-bare-metal-compare/) | 裸机轮询 | 基础调试版本，限位回退 5900 脉冲 |
-| **任务1 — 稳定版** | [`task1-bare-metal-stable/`](task1-bare-metal-stable/) | 裸机轮询 | 60min+ 稳定运行验证，限位回退 3050，速度 1000 |
-| **任务2 — 稳定版** | [`task2-freertos-stable/`](task2-freertos-stable/) | FreeRTOS (4 任务) | 信号量 + 队列 IPC，STOP/START 指令，速度 1000 |
-| **任务2 — 结构体版** | [`task2-freertos-struct-state/`](task2-freertos-struct-state/) | FreeRTOS (4 任务) | 结构体状态管理，速度 1500 |
-| **任务3 — 最终版** | [`task3-freertos-final/`](task3-freertos-final/) | FreeRTOS (7 任务) | 障碍物恢复 + LED 模式 + 中点定位 + 信号量驱动，速度 1000 |
+| **任务1 — 初版** | [`task1-初版/`](task1-初版/) | 裸机轮询 | 基础调试版本，限位回退 5900 脉冲 |
+| **任务2 — OC翻转** | [`task2-OC翻转电平/`](task2-OC翻转电平/) | 裸机轮询 | 60min+ 稳定运行验证，限位回退 3050，速度 1000 |
+| **任务3 — FreeRTOS 4任务** | [`task3-freertos-4任务/`](task3-freertos-4任务/) | FreeRTOS (4 任务) | 信号量 + 队列 IPC，STOP/START 指令，速度 1000 |
+| **任务4 — 电机结构体** | [`task4-电机结构体/`](task4-电机结构体/) | FreeRTOS (4 任务) | 结构体状态管理，速度 1500 |
+| **任务5 — FreeRTOS 7任务** | [`task5-freertos-7任务/`](task5-freertos-7任务/) | FreeRTOS (7 任务) | 障碍物恢复 + LED 模式 + 中点定位 + 信号量驱动，速度 1000 |
+| **任务6 — 宏定义OC翻转** | [`task6--宏定义--OC翻转/`](task6--宏定义--OC翻转/) | FreeRTOS (7 任务) | 全部电机参数宏定义化，TIM5 OC 翻转脉冲输出 |
+| **任务7 — 梯形加减速** | [`task7--梯形加减速/`](task7--梯形加减速/) | FreeRTOS (7 任务) | 梯形加减速算法，单位制距离控制，PascalCase API |
 
 ### 详细版本对比
 
-| 功能 | 任务1比较 | 任务1稳定 | 任务2稳定 | 任务2结构体 | 任务3 |
-|------|:---:|:---:|:---:|:---:|:---:|
-| RTOS | ✗ | ✗ | ✓ FreeRTOS | ✓ FreeRTOS | ✓ FreeRTOS |
-| 任务数 | 1 (主循环) | 1 (主循环) | 4 | 4 | 7 |
-| 电机速度 (pps) | 默认 | 1000 | 1000 | 1500 | 1000 |
-| 限位回退 (脉冲) | 5900 | 3050 | — | — | — |
-| 串口指令 | ✗ | ✗ | STOP/START | STOP/START | STOP/START |
-| 结构体状态管理 | ✗ | ✗ | ✗ | ✓ | ✓ |
-| 信号量 IPC | ✗ | ✗ | ✓ | ✓ | ✓ |
-| 消息队列 | ✗ | ✗ | ✓ | ✓ | ✓ |
-| 障碍物检测恢复 | ✗ | ✗ | ✗ | ✗ | ✓ (3次确认) |
-| LED 模式控制 | ✗ | ✗ | ✗ | ✗ | ✓ (4模式) |
-| 中点定位 | ✗ | ✗ | ✗ | ✗ | ✓ (3050脉冲) |
-| 信号量驱动串口 | ✗ | ✗ | ✗ | ✗ | ✓ |
-| 稳定性验证 | ✗ | ✓ (60min+) | ✓ | ✓ | ✓ |
+| 功能             | 任务1初版   | 任务2 OC翻转 | 任务3 4任务  | 任务4 结构体  | 任务5 7任务     | 任务6 宏定义     | 任务7 梯形       |
+| ---------------- | ----------- | ------------ | ------------ | ------------- | --------------- | ---------------- | ---------------- |
+| RTOS             | ✗           | ✗            | ✓ FreeRTOS   | ✓ FreeRTOS    | ✓ FreeRTOS      | ✓ FreeRTOS       | ✓ FreeRTOS       |
+| 任务数           | 1 (主循环)  | 1 (主循环)   | 4            | 4             | 7               | 7                | 7                |
+| 电机速度 (pps)   | 默认        | 1000         | 1000         | 1500          | 1000            | 1600 (1rps)      | 1600 (1rps)      |
+| 限位回退 (脉冲)  | 5900        | 3050         | —            | —             | 3050            | 2800             | 2800             |
+| 串口指令         | ✗           | ✗            | STOP/START   | STOP/START    | STOP/START      | STOP/START       | STOP/START       |
+| 结构体状态管理   | ✗           | ✗            | ✗            | ✓             | ✓               | ✓                | ✓ (重构)         |
+| 信号量 IPC       | ✗           | ✗            | ✓            | ✓             | ✓               | ✓                | ✓                |
+| 消息队列         | ✗           | ✗            | ✓            | ✓             | ✓               | ✓                | ✓                |
+| 障碍物检测恢复   | ✗           | ✗            | ✗            | ✗             | ✓ (3次确认)     | ✓ (3次确认)      | ✓ (3次确认)      |
+| LED 模式控制     | ✗           | ✗            | ✗            | ✗             | ✓ (4模式)       | ✓ (4模式)        | ✓ (4模式)        |
+| 中点定位         | ✗           | ✗            | ✗            | ✗             | ✓ (3050脉冲)    | ✓ (2800脉冲)     | ✓ (1.75圈)       |
+| 信号量驱动串口   | ✗           | ✗            | ✗            | ✗             | ✓               | ✓                | ✓                |
+| 宏定义参数化     | ✗           | ✗            | ✗            | ✗             | ✗               | ✓                | ✓                |
+| OC翻转脉冲       | ✗           | ✗            | ✗            | ✗             | ✗               | ✓                | ✓                |
+| 梯形加减速       | ✗           | ✗            | ✗            | ✗             | ✗               | ✗                | ✓                |
+| 单位制距离控制   | ✗           | ✗            | ✗            | ✗             | ✗               | ✗                | ✓                |
+| 稳定性验证       | ✗           | ✓ (60min+)   | ✓            | ✓             | ✓               | ✓                | ✓                |
 
 ## 仓库结构
 
@@ -71,11 +77,13 @@ stm32f107-edu-robot/
 ├── LICENSE                          ← MIT 许可证
 ├── .gitignore                       ← Keil + 嵌入式忽略规则
 │
-├── task1-bare-metal-compare/        ← 任务1：裸机比较/调试版
-├── task1-bare-metal-stable/         ← 任务1：裸机稳定版 (60min 验证)
-├── task2-freertos-stable/           ← 任务2：FreeRTOS 稳定版
-├── task2-freertos-struct-state/     ← 任务2：FreeRTOS 结构体状态管理版
-└── task3-freertos-final/            ← 任务3：FreeRTOS 最终整合版
+├── task1-初版/                      ← 任务1：裸机调试版，限位回退 5900 脉冲
+├── task2-OC翻转电平/                ← 任务2：裸机稳定版 (60min 验证)，限位回退 3050
+├── task3-freertos-4任务/            ← 任务3：FreeRTOS 4 任务稳定版
+├── task4-电机结构体/                ← 任务4：FreeRTOS 结构体状态管理版，速度 1500
+├── task5-freertos-7任务/            ← 任务5：FreeRTOS 7 任务最终版 (障碍物+LED+中点)
+├── task6--宏定义--OC翻转/           ← 任务6：宏定义参数化 + TIM5 OC 翻转脉冲
+└── task7--梯形加减速/               ← 任务7：梯形加减速 + 单位制距离控制 + PascalCase API
 ```
 
 每个子项目包含：
@@ -153,7 +161,7 @@ stm32f107-edu-robot/
 > **作者**：Tom
 > **学位**：机器人工程学士
 > **项目类型**：毕业设计
-> **最后更新**：2026-06-03
+> **最后更新**：2026-06-23
 
 ---
 
@@ -163,7 +171,7 @@ A comprehensive embedded motor control and sensor acquisition system based on ST
 
 ## Project Overview
 
-This repository contains five progressive versions of an educational robot control system, demonstrating the evolution from a bare-metal foreground/background architecture to a FreeRTOS-based real-time multi-tasking system. Each version iterates on its predecessor, covering embedded software design patterns commonly used in industrial and educational robotics.
+This repository contains seven progressive versions of an educational robot control system, demonstrating the evolution from a bare-metal foreground/background architecture to a FreeRTOS-based real-time multi-tasking system. Each version iterates on its predecessor, covering embedded software design patterns commonly used in industrial and educational robotics.
 
 ### Key Features
 
@@ -197,29 +205,35 @@ This repository contains five progressive versions of an educational robot contr
 
 | Version | Directory | Architecture | Key Highlights |
 |---------|-----------|-------------|----------------|
-| **Task 1 — Compare** | [`task1-bare-metal-compare/`](task1-bare-metal-compare/) | Bare metal (polling) | Baseline debug version, limit retract=5900 pulses |
-| **Task 1 — Stable** | [`task1-bare-metal-stable/`](task1-bare-metal-stable/) | Bare metal (polling) | Verified 60min+ stable run, limit retract=3050, speed=1000 |
-| **Task 2 — Stable** | [`task2-freertos-stable/`](task2-freertos-stable/) | FreeRTOS (4 tasks) | Semaphore + Queue IPC, STOP/START commands, speed=1000 |
-| **Task 2 — Struct** | [`task2-freertos-struct-state/`](task2-freertos-struct-state/) | FreeRTOS (4 tasks) | Struct-based state management, speed=1500 |
-| **Task 3 — Final** | [`task3-freertos-final/`](task3-freertos-final/) | FreeRTOS (7 tasks) | Obstacle recovery + LED modes + midpoint positioning + semaphore-driven, speed=1000 |
+| **Task 1 — Initial** | [`task1-初版/`](task1-初版/) | Bare metal (polling) | Baseline debug version, limit retract=5900 pulses |
+| **Task 2 — OC Toggle** | [`task2-OC翻转电平/`](task2-OC翻转电平/) | Bare metal (polling) | Verified 60min+ stable run, limit retract=3050, speed=1000 |
+| **Task 3 — FreeRTOS 4-task** | [`task3-freertos-4任务/`](task3-freertos-4任务/) | FreeRTOS (4 tasks) | Semaphore + Queue IPC, STOP/START commands, speed=1000 |
+| **Task 4 — Struct State** | [`task4-电机结构体/`](task4-电机结构体/) | FreeRTOS (4 tasks) | Struct-based state management, speed=1500 |
+| **Task 5 — FreeRTOS 7-task** | [`task5-freertos-7任务/`](task5-freertos-7任务/) | FreeRTOS (7 tasks) | Obstacle recovery + LED modes + midpoint positioning + semaphore-driven, speed=1000 |
+| **Task 6 — Macro OC Toggle** | [`task6--宏定义--OC翻转/`](task6--宏定义--OC翻转/) | FreeRTOS (7 tasks) | All motor params as macros, TIM5 OC toggle pulse output |
+| **Task 7 — Trapezoidal Accel** | [`task7--梯形加减速/`](task7--梯形加减速/) | FreeRTOS (7 tasks) | Trapezoidal acceleration, unit-based distance, PascalCase API |
 
 ### Detailed Feature Comparison
 
-| Feature | Task1 Compare | Task1 Stable | Task2 Stable | Task2 Struct | Task3 |
-|---------|:---:|:---:|:---:|:---:|:---:|
-| RTOS | ✗ | ✗ | ✓ FreeRTOS | ✓ FreeRTOS | ✓ FreeRTOS |
-| Task Count | 1 (main loop) | 1 (main loop) | 4 | 4 | 7 |
-| Motor Speed (pps) | Default | 1000 | 1000 | 1500 | 1000 |
-| Limit Retract (pulses) | 5900 | 3050 | — | — | — |
-| Serial Commands | ✗ | ✗ | STOP/START | STOP/START | STOP/START |
-| Struct State Mgmt | ✗ | ✗ | ✗ | ✓ | ✓ |
-| Semaphore IPC | ✗ | ✗ | ✓ | ✓ | ✓ |
-| Message Queues | ✗ | ✗ | ✓ | ✓ | ✓ |
-| Obstacle Recovery | ✗ | ✗ | ✗ | ✗ | ✓ (3-count) |
-| LED Modes | ✗ | ✗ | ✗ | ✗ | ✓ (4 modes) |
-| Midpoint Positioning | ✗ | ✗ | ✗ | ✗ | ✓ (3050 pulses) |
-| Semaphore-driven UART | ✗ | ✗ | ✗ | ✗ | ✓ |
-| Stable Run Verified | ✗ | ✓ (60min+) | ✓ | ✓ | ✓ |
+| Feature               | Task1 Init    | Task2 OC      | Task3 4-task  | Task4 Struct  | Task5 7-task     | Task6 Macro      | Task7 Trap       |
+| --------------------- | ------------- | ------------- | ------------- | ------------- | ---------------- | ---------------- | ---------------- |
+| RTOS                  | ✗             | ✗             | ✓ FreeRTOS    | ✓ FreeRTOS    | ✓ FreeRTOS       | ✓ FreeRTOS       | ✓ FreeRTOS       |
+| Task Count            | 1 (main loop) | 1 (main loop) | 4             | 4             | 7                | 7                | 7                |
+| Motor Speed (pps)     | Default       | 1000          | 1000          | 1500          | 1000             | 1600 (1rps)      | 1600 (1rps)      |
+| Limit Retract (pulses)| 5900          | 3050          | —             | —             | 3050             | 2800             | 2800             |
+| Serial Commands       | ✗             | ✗             | STOP/START    | STOP/START    | STOP/START       | STOP/START       | STOP/START       |
+| Struct State Mgmt     | ✗             | ✗             | ✗             | ✓             | ✓                | ✓                | ✓ (refactored)   |
+| Semaphore IPC         | ✗             | ✗             | ✓             | ✓             | ✓                | ✓                | ✓                |
+| Message Queues        | ✗             | ✗             | ✓             | ✓             | ✓                | ✓                | ✓                |
+| Obstacle Recovery     | ✗             | ✗             | ✗             | ✗             | ✓ (3-count)      | ✓ (3-count)      | ✓ (3-count)      |
+| LED Modes             | ✗             | ✗             | ✗             | ✗             | ✓ (4 modes)      | ✓ (4 modes)      | ✓ (4 modes)      |
+| Midpoint Positioning  | ✗             | ✗             | ✗             | ✗             | ✓ (3050 pulses)  | ✓ (2800 pulses)  | ✓ (1.75 revs)    |
+| Semaphore-driven UART | ✗             | ✗             | ✗             | ✗             | ✓                | ✓                | ✓                |
+| Macro Parameterization| ✗             | ✗             | ✗             | ✗             | ✗                | ✓                | ✓                |
+| OC Toggle Pulse       | ✗             | ✗             | ✗             | ✗             | ✗                | ✓                | ✓                |
+| Trapezoidal Accel     | ✗             | ✗             | ✗             | ✗             | ✗                | ✗                | ✓                |
+| Unit-based Distance   | ✗             | ✗             | ✗             | ✗             | ✗                | ✗                | ✓                |
+| Stable Run Verified   | ✗             | ✓ (60min+)    | ✓             | ✓             | ✓                | ✓                | ✓                |
 
 ## Repository Structure
 
@@ -230,11 +244,13 @@ stm32f107-edu-robot/
 ├── LICENSE                          ← MIT License
 ├── .gitignore                       ← Keil + embedded project ignore rules
 │
-├── task1-bare-metal-compare/        ← Task 1: Bare metal comparison/debug version
-├── task1-bare-metal-stable/         ← Task 1: Bare metal stable (60min verified)
-├── task2-freertos-stable/           ← Task 2: FreeRTOS stable version
-├── task2-freertos-struct-state/     ← Task 2: FreeRTOS with struct state management
-└── task3-freertos-final/            ← Task 3: Final consolidated FreeRTOS version
+├── task1-初版/                      ← Task 1: Bare-metal debug, limit retract=5900
+├── task2-OC翻转电平/                ← Task 2: Bare-metal stable (60min verified), retract=3050
+├── task3-freertos-4任务/            ← Task 3: FreeRTOS 4-task stable version
+├── task4-电机结构体/                ← Task 4: FreeRTOS struct state management, speed=1500
+├── task5-freertos-7任务/            ← Task 5: FreeRTOS 7-task final (obstacle+LED+midpoint)
+├── task6--宏定义--OC翻转/           ← Task 6: Macro parameterization + TIM5 OC toggle
+└── task7--梯形加减速/               ← Task 7: Trapezoidal accel + unit-based distance + PascalCase API
 ```
 
 Each sub-project contains:
@@ -312,4 +328,4 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 > **Author**: Tom
 > **Degree**: Bachelor of Engineering in Robotics
 > **Project Type**: Graduation Design Project
-> **Last Updated**: 2026-06-03
+> **Last Updated**: 2026-06-23
