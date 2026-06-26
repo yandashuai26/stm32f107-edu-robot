@@ -11,55 +11,61 @@ digraph G {
     bgcolor="#fafafa";
 
     subgraph cluster_gen1 {
-        label="v1 裸机前后台（任务1）";
+        label="第一代: 裸机前后台（任务1~2）";
         fontsize=14; fontname="Microsoft YaHei";
         style="filled"; fillcolor="#e3f2fd"; color="#1565c0"; penwidth=2;
 
-        g1_init [label="bsp_init()\nGPIO/TIM/USART\nADC/I2C/OLED", shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=9, fontname="Microsoft YaHei"];
-        g1_loop [label="while(1) 超级循环\n━━━━━━━━━━━━━━\n1. 1s采集温度/距离\n2. 限位->停->换向->回退\n3. 目标到达->重置->重启\n4. 温度>500->慢闪告警\n5. 距离<40->停机+快闪\n6. LED模式切换\n7. 电机状态保持",
+        g1_init [label="bsp_init()\nGPIO/TIM/USART\nADC/I2C/OLED\nmotor_start()", shape=box, style="filled,rounded", fillcolor="#bbdefb", fontsize=9, fontname="Microsoft YaHei"];
+        g1_loop [label="while(1) 超级循环\n━━━━━━━━━━━━━━\n1. 1s采集温度/距离\n2. 限位→停→换向→回退\n3. 目标到达→重置→重启\n4. 温度>500→慢闪告警\n5. 距离<40→停机+快闪\n6. LED模式切换\n7. 电机状态保持",
             shape=box, style="filled,rounded", fillcolor="#90caf9", fontsize=9, fontname="Microsoft YaHei"];
-        g1_isr [label="TIM1_UP_IRQHandler\n1ms 系统时基\nsysTick_ms 0~5000", shape=box, style="filled,dashed,rounded", fillcolor="#e3f2fd", fontsize=9, fontname="Microsoft YaHei"];
-        g1_exec [label="执行特征\n━━━━━━━━\nX 顺序执行\nX 无优先级\nX 100% CPU忙等\nX 实时性差",
+        g1_isr [label="ISR (阻塞式)\n━━━━━━━━━━━━━━\nEXTI: delay_ms(50)在ISR内\nTIM5: 脉冲计数+斜坡\nTIM1: 1ms时基",
+            shape=box, style="filled,dashed,rounded", fillcolor="#e3f2fd", fontsize=9, fontname="Microsoft YaHei"];
+        g1_exec [label="执行特征\n━━━━━━━━\n✗ 顺序执行,无优先级\n✗ ISR内阻塞(delay_ms)\n✗ 100% CPU忙等\n✗ 实时性差\n✗ 扩展需改主循环",
             shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=9, fontname="Microsoft YaHei"];
 
         g1_init -> g1_loop [style=bold];
-        g1_isr -> g1_loop [style=dotted, label="1ms"];
+        g1_isr -> g1_loop [style=dotted, label="轮询标志"];
         g1_loop -> g1_exec [style=bold];
     }
 
     subgraph cluster_gen2 {
-        label="v2 FreeRTOS 4任务（任务2）";
+        label="第二代: FreeRTOS 多任务（任务3~6）";
         fontsize=14; fontname="Microsoft YaHei";
         style="filled"; fillcolor="#c8e6c9"; color="#2e7d32"; penwidth=2;
 
-        g2_tasks [label="4个独立任务\n━━━━━━━━━━━━━━\n1. vTaskLimitSwitch (prio4)\n    信号量触发 50ms去抖\n2. vTaskControl (prio3)\n    10ms轮询 STOP/START\n3. vTaskCollect (prio2)\n    100ms 温度+距离\n4. vTaskCommunication (prio1)\n    80ms printf+OLED",
+        g2_tasks [label="4→7个独立任务\n━━━━━━━━━━━━━━\n1. vTaskLimitSwitch (prio4)\n    信号量触发,50ms去抖\n2. vTaskAbnormalSit. (prio4)\n    障碍物3次确认恢复\n3. vTaskControl (prio3)\n    信号量驱动 STOP/START\n4. vTaskCollect (prio2)\n    100ms 温度+距离+RS485\n5. vTaskMotorReached (prio2)\n    中点定位脉冲到达\n6. vTaskCommunication (prio1)\n    printf+OLED\n7. vTaskLedMode (prio1)\n    4模式LED独立控制",
             shape=box, style="filled,rounded", fillcolor="#a5d6a7", fontsize=9, fontname="Microsoft YaHei"];
-        g2_ipc [label="IPC 机制\n━━━━━━━━\nLimitSemaphore x1\nTempQueue x1\nDisQueue x1", shape=box, style="filled,rounded", fillcolor="#81c784", fontsize=9, fontname="Microsoft YaHei"];
-        g2_exec [label="执行特征\n━━━━━━━━\nV 抢占式调度\nV 优先级保证\nV 阻塞时释放CPU\nV 实时性好",
+        g2_ipc [label="IPC 机制\n━━━━━━━━━━━━━━\n4个二进制信号量\n4个消息队列(20×uint32)\nISR非阻塞:\nxSemaphoreGiveFromISR\n全事件驱动,零轮询",
+            shape=box, style="filled,rounded", fillcolor="#81c784", fontsize=9, fontname="Microsoft YaHei"];
+        g2_motor [label="电机驱动演进\n━━━━━━━━━━━━━━\nv3: PWM1+ARR动态(任务3)\nv4: motor_t结构体(任务4)\nv5: 7任务全功能(任务5)\nv6: ~40宏定义+OC Toggle(任务6)\n斜坡: 5→1→10 Hz/步",
+            shape=box, style="filled,rounded", fillcolor="#66bb6a", fontcolor="white", fontsize=9, fontname="Microsoft YaHei"];
+        g2_exec [label="执行特征\n━━━━━━━━\n✓ 抢占式优先级调度\n✓ ISR非阻塞(信号量)\n✓ 阻塞时释放CPU\n✓ 安全优先(限位最高)\n✓ 扩展性强(加任务即可)",
             shape=box, style="filled,rounded", fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
 
         g2_tasks -> g2_ipc [style=bold];
-        g2_ipc -> g2_exec [style=bold];
+        g2_ipc -> g2_motor [style=bold];
+        g2_motor -> g2_exec [style=bold];
     }
 
     subgraph cluster_gen3 {
-        label="v3 FreeRTOS 7任务（任务3）";
+        label="第三代: 梯形加减速（任务7）";
         fontsize=14; fontname="Microsoft YaHei";
-        style="filled"; fillcolor="#ffcdd2"; color="#c62828"; penwidth=2;
+        style="filled"; fillcolor="#fce4ec"; color="#880e4f"; penwidth=2;
 
-        g3_tasks [label="7个独立任务\n━━━━━━━━━━━━━━\n1. vTaskLimitSwitch (prio4)\n2. vTaskAbnormalSit. (prio4)\n3. vTaskControl (prio3)\n4. vTaskCollect (prio2)\n5. vTaskMotorReached (prio2)\n6. vTaskCommu. (prio1)\n7. vTaskLedMode (prio1)",
-            shape=box, style="filled,rounded", fillcolor="#ef9a9a", fontsize=9, fontname="Microsoft YaHei"];
-        g3_ipc [label="IPC 机制\n━━━━━━━━\n4个信号量\n4个消息队列\n全事件驱动", shape=box, style="filled,rounded", fillcolor="#ef5350", fontsize=9, fontname="Microsoft YaHei"];
-        g3_features [label="新增特性\n━━━━━━━━\nV 障碍物自动检测恢复\nV 中点定位(3050脉冲)\nV LED 4模式独立控制\nV 斜坡加减速(1Hz/脉冲)\nV motor_t 结构体管理\nV 零轮询",
-            shape=box, style="filled,rounded", fillcolor="#e57373", fontsize=9, fontname="Microsoft YaHei"];
-        g3_exec [label="执行特征\n━━━━━━━━\nV 抢占式调度\nV 安全优先\nV 扩展性强\nV 实时性最佳",
-            shape=box, style="filled,rounded", fillcolor="#ef9a9a", fontsize=9, fontname="Microsoft YaHei"];
+        g3_state [label="电机状态机\n━━━━━━━━━━━━━━\nMOTOR_STOP → MOTOR_ACCEL\n→ MOTOR_RUN → MOTOR_DECEL\n→ MOTOR_STOP\n\nBresenham离散加速公式\nnext=PULSE-((2*PULSE+rest)/(4*n+1))\n整数开方usqrt()",
+            shape=box, style="filled,rounded", fillcolor="#f8bbd0", fontsize=9, fontname="Microsoft YaHei"];
+        g3_unit [label="单位制系统\n━━━━━━━━━━━━━━\n基本单位: 0.01圈\nPULSES_TO_UNIT(p)\nUNIT_TO_PULSES(u)\nHZ_TO_SPEED(h)\nSPEED_TO_HZ(s)\n\n运动参数:\nMotorSetAccel()\nMotorSetDecel()\nMotorSetTargetUnit()",
+            shape=box, style="filled,rounded", fillcolor="#f48fb1", fontsize=9, fontname="Microsoft YaHei"];
+        g3_api [label="PascalCase API\n━━━━━━━━━━━━━━\nMotorInit() MotorStart()\nMotorStop() MotorSetSpeed()\nMotorSetAccel() MotorSetDecel()\nBspInit() DelayMs()\nLedOn() LedOff()\nOledShowString()\n~50个宏定义参数化",
+            shape=box, style="filled,rounded", fillcolor="#ec407a", fontcolor="white", fontsize=9, fontname="Microsoft YaHei"];
+        g3_exec [label="执行特征\n━━━━━━━━\n✓ 完整梯形运动轮廓\n✓ 可配置加速度/减速度\n✓ 单位制距离控制\n✓ 三角/梯形自适应\n✓ 裸机电机验证模式\n✓ 架构可扩展至RTOS",
+            shape=box, style="filled,rounded", fillcolor="#fce4ec", fontsize=9, fontname="Microsoft YaHei"];
 
-        g3_tasks -> g3_ipc [style=bold];
-        g3_ipc -> g3_features [style=bold];
-        g3_features -> g3_exec [style=bold];
+        g3_state -> g3_unit [style=bold];
+        g3_unit -> g3_api [style=bold];
+        g3_api -> g3_exec [style=bold];
     }
 
-    g1_exec -> g2_tasks [label="引入 FreeRTOS", fontsize=11, fontname="Microsoft YaHei", style=bold, color="#1565c0"];
-    g2_exec -> g3_tasks [label="扩展任务\n全事件驱动", fontsize=11, fontname="Microsoft YaHei", style=bold, color="#c62828"];
+    g1_exec -> g2_tasks [label="引入 FreeRTOS\nISR非阻塞化\n任务拆分", fontsize=10, fontname="Microsoft YaHei", style=bold, color="#1565c0"];
+    g2_exec -> g3_state [label="运动控制重写\n线性斜坡→梯形轮廓\n裸机验证模式", fontsize=10, fontname="Microsoft YaHei", style=bold, color="#880e4f"];
 }

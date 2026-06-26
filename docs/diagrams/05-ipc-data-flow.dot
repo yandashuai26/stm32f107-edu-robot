@@ -2,7 +2,7 @@ digraph G {
     rankdir=LR;
     fontname="Microsoft YaHei";
     fontsize=14;
-    label="STM32F107VCT6 — v3.0 IPC 数据流图";
+    label="STM32F107VCT6 — FreeRTOS IPC 数据流图 (任务5~6架构)";
     labelloc=t;
     nodesep=0.3;
     ranksep=0.4;
@@ -14,32 +14,32 @@ digraph G {
         fontsize=14; fontname="Microsoft YaHei";
         style="filled"; fillcolor="#ffebee"; color="#c62828"; penwidth=2;
 
-        src1 [label="EXTI\n限位触发", shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=10, fontname="Microsoft YaHei"];
-        src2 [label="USART3\n指令接收", shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=10, fontname="Microsoft YaHei"];
-        src3 [label="TIM5\n脉冲到达", shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=10, fontname="Microsoft YaHei"];
-        src4 [label="vTaskCollect\n100ms 软件触发", shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=10, fontname="Microsoft YaHei"];
+        exti [label="EXTI15_10 ISR\nPC13/PC14限位触发\n记录引脚号", shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=9, fontname="Microsoft YaHei"];
+        usart_i [label="USART3 ISR\n字节级接收\n帧检测(\\r\\n)", shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=9, fontname="Microsoft YaHei"];
+        tim5_i [label="TIM5 ISR\n脉冲到达\n计数+斜坡", shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=9, fontname="Microsoft YaHei"];
+        tcol [label="vTaskCollect\n100ms周期\n温度+距离采集", shape=box, style="filled,rounded", fillcolor="#ffcdd2", fontsize=9, fontname="Microsoft YaHei"];
     }
 
     subgraph cluster_sem {
-        label="信号量（事件通知）";
+        label="信号量 (事件通知)";
         fontsize=14; fontname="Microsoft YaHei";
         style="filled"; fillcolor="#e8eaf6"; color="#283593"; penwidth=2;
 
-        s1 [label="LimitSemaphore\n二进制", shape=component, style=filled, fillcolor="#c5cae9", fontsize=9, fontname="Microsoft YaHei"];
-        s2 [label="USART3_RxSemaphore\n二进制", shape=component, style=filled, fillcolor="#c5cae9", fontsize=9, fontname="Microsoft YaHei"];
-        s3 [label="MotorTargetReached\nSemaphore", shape=component, style=filled, fillcolor="#c5cae9", fontsize=9, fontname="Microsoft YaHei"];
-        s4 [label="AbnormalSituation\nSemaphore", shape=component, style=filled, fillcolor="#c5cae9", fontsize=9, fontname="Microsoft YaHei"];
+        s1 [label="LimitSemaphore\n二进制\nEXTI → 限位任务", shape=component, style=filled, fillcolor="#c5cae9", fontsize=9, fontname="Microsoft YaHei"];
+        s2 [label="USART3_RxSemaphore\n二进制\nUSART3 → 控制任务", shape=component, style=filled, fillcolor="#c5cae9", fontsize=9, fontname="Microsoft YaHei"];
+        s3 [label="MotorTargetReached\nSemaphore\nTIM5 → 中点任务", shape=component, style=filled, fillcolor="#c5cae9", fontsize=9, fontname="Microsoft YaHei"];
+        s4 [label="AbnormalSituation\nSemaphore\n采集 → 异常任务", shape=component, style=filled, fillcolor="#c5cae9", fontsize=9, fontname="Microsoft YaHei"];
     }
 
     subgraph cluster_queue {
-        label="消息队列（数据传输）";
+        label="消息队列 (数据传输)";
         fontsize=14; fontname="Microsoft YaHei";
         style="filled"; fillcolor="#e8f5e9"; color="#1b5e20"; penwidth=2;
 
-        q1 [label="TempQueue\n温度", shape=cylinder, style=filled, fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
-        q2 [label="DisQueue\n距离", shape=cylinder, style=filled, fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
-        q3 [label="AbnormalSit.\nDisQueue", shape=cylinder, style=filled, fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
-        q4 [label="LedModeQueue\nLED模式", shape=cylinder, style=filled, fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
+        q1 [label="TempQueue\n温度 (uint32×20)", shape=cylinder, style=filled, fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
+        q2 [label="DisQueue\n距离 (uint32×20)", shape=cylinder, style=filled, fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
+        q3 [label="AbnormalSituation\nDisQueue\n距离 (uint32×20)", shape=cylinder, style=filled, fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
+        q4 [label="LedModeQueue\nLED模式 (uint32×20)", shape=cylinder, style=filled, fillcolor="#c8e6c9", fontsize=9, fontname="Microsoft YaHei"];
     }
 
     subgraph cluster_dst {
@@ -47,31 +47,31 @@ digraph G {
         fontsize=14; fontname="Microsoft YaHei";
         style="filled"; fillcolor="#fff8e1"; color="#f57f17"; penwidth=2;
 
-        dst1 [label="vTaskLimitSwitch\n限位处理", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=10, fontname="Microsoft YaHei"];
-        dst2 [label="vTaskControl\n指令解析", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=10, fontname="Microsoft YaHei"];
-        dst3 [label="vTaskMotorReached\n中点定位", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=10, fontname="Microsoft YaHei"];
-        dst4 [label="vTaskAbnormalSit.\n异常检测", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=10, fontname="Microsoft YaHei"];
-        dst5 [label="vTaskCommunication\n数据展示", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=10, fontname="Microsoft YaHei"];
-        dst6 [label="vTaskLedMode\nLED控制", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=10, fontname="Microsoft YaHei"];
+        d1 [label="vTaskLimitSwitch\nprio4 最高\n限位处理+换向\n300ms冷却期", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
+        d2 [label="vTaskControl\nprio3\n指令解析\nSTOP/START", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
+        d3 [label="vTaskMotorReached\nprio2\n中点定位到达\n重设目标脉冲", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
+        d4 [label="vTaskAbnormalSituation\nprio4\ndis<50mm→停机\n3次>50mm→恢复\n→LedModeQueue", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
+        d5 [label="vTaskCommunication\nprio1 最低\n200ms周期\nOLED+printf", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
+        d6 [label="vTaskLedMode\nprio1\nLedModeQueue消费\n模式0~3\nPE3/PE4控制", shape=box, style="filled,rounded", fillcolor="#ffe0b2", fontsize=9, fontname="Microsoft YaHei"];
     }
 
-    src1 -> s1 [label="xSemaphoreGiveFromISR", fontsize=8, fontname="Microsoft YaHei", color="#c62828"];
-    src2 -> s2 [label="xSemaphoreGiveFromISR", fontsize=8, fontname="Microsoft YaHei", color="#c62828"];
-    src3 -> s3 [label="xSemaphoreGiveFromISR", fontsize=8, fontname="Microsoft YaHei", color="#c62828"];
-    src4 -> s4 [label="xSemaphoreGive", fontsize=8, fontname="Microsoft YaHei", color="#c62828"];
+    exti -> s1 [label="xSemaphoreGiveFromISR", fontsize=8, fontname="Microsoft YaHei", color="#c62828"];
+    usart_i -> s2 [label="xSemaphoreGiveFromISR", fontsize=8, fontname="Microsoft YaHei", color="#c62828"];
+    tim5_i -> s3 [label="xSemaphoreGiveFromISR", fontsize=8, fontname="Microsoft YaHei", color="#c62828"];
+    tcol -> s4 [label="xSemaphoreGive", fontsize=8, fontname="Microsoft YaHei", color="#c62828", style=dashed];
 
-    s1 -> dst1 [label="xSemaphoreTake\nportMAX_DELAY", fontsize=8, fontname="Microsoft YaHei", color="#283593"];
-    s2 -> dst2 [label="xSemaphoreTake\nportMAX_DELAY", fontsize=8, fontname="Microsoft YaHei", color="#283593"];
-    s3 -> dst3 [label="xSemaphoreTake\nportMAX_DELAY", fontsize=8, fontname="Microsoft YaHei", color="#283593"];
-    s4 -> dst4 [label="xSemaphoreTake\nportMAX_DELAY", fontsize=8, fontname="Microsoft YaHei", color="#283593"];
+    s1 -> d1 [label="xSemaphoreTake\nportMAX_DELAY", fontsize=8, fontname="Microsoft YaHei", color="#283593"];
+    s2 -> d2 [label="xSemaphoreTake\nportMAX_DELAY", fontsize=8, fontname="Microsoft YaHei", color="#283593"];
+    s3 -> d3 [label="xSemaphoreTake\nportMAX_DELAY", fontsize=8, fontname="Microsoft YaHei", color="#283593"];
+    s4 -> d4 [label="xSemaphoreTake\nportMAX_DELAY", fontsize=8, fontname="Microsoft YaHei", color="#283593"];
 
-    src4 -> q1 [label="xQueueSend\n温度数据", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
-    src4 -> q2 [label="xQueueSend\n距离数据", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
-    src4 -> q3 [label="xQueueSend\n距离数据", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
-    dst4 -> q4 [label="xQueueSend\nLED模式", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
+    tcol -> q1 [label="xQueueSend\n温度", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
+    tcol -> q2 [label="xQueueSend\n距离", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
+    tcol -> q3 [label="xQueueSend\n距离", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
+    d4 -> q4 [label="xQueueSend\nLED模式", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
 
-    q1 -> dst5 [label="xQueueReceive\n温度", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
-    q2 -> dst5 [label="xQueueReceive\n距离", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
-    q3 -> dst4 [label="xQueueReceive\n距离", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
-    q4 -> dst6 [label="xQueueReceive\n模式指令", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
+    q1 -> d5 [label="xQueueReceive\n温度", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
+    q2 -> d5 [label="xQueueReceive\n距离", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
+    q3 -> d4 [label="xQueueReceive\n距离", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
+    q4 -> d6 [label="xQueueReceive\n模式指令", fontsize=8, fontname="Microsoft YaHei", color="#1b5e20"];
 }
